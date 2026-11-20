@@ -1,0 +1,17 @@
+{
+  "case_id": "CASE-2026-014",
+  "collected_at": "2026-11-20T19:38:29+00:00",
+  "custodian": "forensic-intern",
+  "file_count": 563,
+  "total_bytes": 334452,
+  "by_doc_type": {
+    "APPROVAL": 64,
+    "CARD_STATEMENT": 1,
+    "EMAIL": 311,
+    "INVOICE": 84,
+    "MINUTES": 20,
+    "QUOTE": 83
+  },
+  "unique_hashes": 563,
+  "duplicate_files": 0
+}

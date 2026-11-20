@@ -1,0 +1,262 @@
+{
+  "id": "aegis-wf3-rules",
+  "name": "[Aegis] WF-3 룰 엔진 실행 → CRITICAL/HIGH 알림",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Seoul",
+    "saveManualExecutions": true
+  },
+  "tags": [
+    {
+      "name": "audit_core"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "wf3-0",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -240,
+        0
+      ],
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "engagement_id",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "wf3-1",
+      "name": "Schedule: 매일 08:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 8,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "wf3-2",
+      "name": "Postgres: 룰 14종 실행",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM audit_core.run_rules($1);",
+        "options": {
+          "queryReplacement": "ENG-2026-001"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "PG_CRED",
+          "name": "Postgres audit_db"
+        }
+      }
+    },
+    {
+      "id": "wf3-3",
+      "name": "Postgres: 룰별 요약",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT rule_id, rule_name, severity, finding_count, item_count, amount_sum\nFROM audit_core.vw_rule_run_summary\nORDER BY CASE severity WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2\n                       WHEN 'MEDIUM' THEN 3 ELSE 4 END, rule_id;",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "PG_CRED",
+          "name": "Postgres audit_db"
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "wf3-4",
+      "name": "Code: 알림 메시지",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json);\nconst critical = rows.filter(r => r.severity === 'CRITICAL');\nconst high = rows.filter(r => r.severity === 'HIGH');\nconst top = [...critical, ...high].slice(0, 5)\n  .map(r => `• [${r.severity}] ${r.rule_id} ${r.rule_name} — ${r.finding_count}건`).join('\\n');\nreturn [{ json: {\n  total_rules: rows.length,\n  critical: critical.length,\n  high: high.length,\n  message: `[Aegis] 룰 실행 완료: ${rows.length}종\\nCRITICAL ${critical.length} / HIGH ${high.length}\\n${top}`,\n} }];"
+      }
+    },
+    {
+      "id": "wf3-5",
+      "name": "IF: CRITICAL 존재",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        960,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.critical }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "wf3-6",
+      "name": "Slack: CRITICAL 알림",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        1180,
+        -80
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#audit-alerts",
+          "mode": "name"
+        },
+        "text": "={{ $json.message }}"
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "SLACK_CRED",
+          "name": "Slack"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "wf3-7",
+      "name": "NoOp: 종료",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1180,
+        80
+      ],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Postgres: 룰 14종 실행",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule: 매일 08:00": {
+      "main": [
+        [
+          {
+            "node": "Postgres: 룰 14종 실행",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres: 룰 14종 실행": {
+      "main": [
+        [
+          {
+            "node": "Postgres: 룰별 요약",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres: 룰별 요약": {
+      "main": [
+        [
+          {
+            "node": "Code: 알림 메시지",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: 알림 메시지": {
+      "main": [
+        [
+          {
+            "node": "IF: CRITICAL 존재",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: CRITICAL 존재": {
+      "main": [
+        [
+          {
+            "node": "Slack: CRITICAL 알림",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "NoOp: 종료",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

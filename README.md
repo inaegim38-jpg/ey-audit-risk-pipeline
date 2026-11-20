@@ -133,6 +133,26 @@ priority = Σ(태그 가중치) + 문서유형 가중치 + 근접중복 1.0 + �
 
 기존 엔진 쪽도 같이 점검했습니다. n8n의 DQ 검증 노드는 `sql/02` 와 1~153줄이 같고 마지막 조회만 다르며, Power BI 기존 측정값 8개가 참조하는 컬럼 7개는 모두 실제 DB에 있습니다. 다만 n8n 쿼리에는 `ANALYZE` 가 빠져 있어 적재 직후 통계가 비는 문제가 남아 있습니다. 실행 로그와 검증 범위는 [docs/VERIFICATION.md](docs/VERIFICATION.md)에 정리했습니다.
 
+## audit_core — 3계층 리스크 엔진
+
+거래·공시·거시·AI QA 데이터를 `audit_core` 스키마 한 곳에 모아 14종 룰로 파인딩을 만들고, 각 파인딩에 증거를 연결해 워크페이퍼까지 추적합니다. 설계 판단은 [docs/AUDIT_CORE.md](docs/AUDIT_CORE.md).
+
+| 파일 | 역할 |
+|---|---|
+| `sql/10_audit_core.sql` | Staging·Conformed·Mart 3계층, 테이블 17개 + 뷰 4개 |
+| `sql/11_seed_audit_core.sql` | 합성 시드: 전표 5,000건(월 파티션 4개), 공시 8건, 거시 5건, AI QA 40건 |
+| `sql/12_rules_engine.sql` | 룰 14종 카탈로그 + `audit_core.run_rules()` + 워크리스트 뷰 |
+| `sql/13_evidence_link.sql` | `forensic` 케이스에 증거 8건 등록, 파인딩 27건 연결(커버리지 67.5%) |
+| `sql/14_verify_audit_core.sql` | PASS/FAIL 검증 10종 |
+| `sql/15_disclosure_events.sql` | 공시 이벤트 스테이징 + `vw_disclosure_watch` |
+| `n8n/wf1_regwatch.json` | WF-1 공시 감시 8노드 (Schedule 07:30) |
+| `n8n/wf3_rules_engine.json` | WF-3 룰 엔진 8노드 (Schedule 08:00 + Execute Workflow) |
+| `n8n/build_audit_workflows.py` | 두 워크플로우 JSON 생성기 (재현용) |
+
+실행 순서는 `10 → 11 → 12 → 13 → 14 → 15`이고, 룰만 다시 돌릴 때는 `SELECT audit_core.run_rules('ENG-2026-001');` 한 줄이면 됩니다. `run_rules()`는 `(engagement_id, rule_id, ref_id)` 유니크 키에 `ON CONFLICT DO UPDATE`를 걸어 두 번 돌려도 파인딩이 늘지 않습니다.
+
+현재 결과는 **룰 14종 / 파인딩 40건(CRITICAL 5 · HIGH 11 · MEDIUM 22 · LOW 2) / 대상 항목 2,225건**입니다. WF-3은 n8n 2.35.7에서 `n8n execute`로 단독 실행해 `status = success`까지 확인했습니다.
+
 ## 구조
 
 ```text
@@ -148,12 +168,14 @@ docs/
   FORENSIC_WORKBENCH.md   설계 판단과 한계
   AUDIT_ENGINE.md         기존 거래 검증 엔진(11개 룰, 8277건)
   VERIFICATION.md         실행·대조 검증 기록
+  AUDIT_CORE.md           audit_core 3계층·룰 14종·증거 커버리지·한계
 sql/
   01~07                   거래 검증 엔진 (PostgreSQL)
   08_forensic_case_schema.sql  포렌식 계층 스키마
   09_forensic_pbi_views.sql    포렌식 Power BI 뷰 4종
+  10~15                   audit_core 3계층·룰 14종·증거 연결·검증·공시 감시
 python/                 BankSim·서울시 데이터 적재, 검토 시트 생성
-n8n/                    수집·검증 워크플로우, 포렌식 케이스 워크플로우
+n8n/                    수집·검증 워크플로우, 포렌식 케이스, 공시 감시(WF-1), 룰 엔진(WF-3)
 powerbi/                DAX 측정값 (거래 검증 8개, 포렌식 22개)
 reports/                기존 분석 보고서
 ```

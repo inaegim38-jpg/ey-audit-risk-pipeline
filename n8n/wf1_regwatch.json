@@ -1,0 +1,278 @@
+{
+  "id": "aegis-wf1-regwatch",
+  "name": "[Aegis] WF-1 규제·공시 수집 → 정정·주요사항 조기경보",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Seoul",
+    "saveManualExecutions": true
+  },
+  "tags": [
+    {
+      "name": "audit_core"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "wf1-1",
+      "name": "Schedule: 매일 07:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 7,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "wf1-2",
+      "name": "Code: 감시 대상",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// 감시 대상 법인. 실무에서는 프로젝트 마스터에서 조회한다.\nreturn [{ json: { corp_code: '00123456', engagement_id: 'ENG-2026-001' } }];"
+      }
+    },
+    {
+      "id": "wf1-3",
+      "name": "HTTP: DART 공시목록",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "url": "https://opendart.fss.or.kr/api/list.json",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "crtfc_key",
+              "value": "={{ $env.DART_API_KEY }}"
+            },
+            {
+              "name": "corp_code",
+              "value": "={{ $json.corp_code }}"
+            },
+            {
+              "name": "bgn_de",
+              "value": "={{ $now.minus({ days: 7 }).toFormat('yyyyMMdd') }}"
+            },
+            {
+              "name": "end_de",
+              "value": "={{ $now.toFormat('yyyyMMdd') }}"
+            },
+            {
+              "name": "page_count",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "wf1-4",
+      "name": "Code: 정정·주요사항 플래그",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const body = $json || {};\nif (body.status && body.status !== '000') {\n  return [{ json: { status: body.status, message: body.message || 'DART error', rows: [] } }];\n}\nconst rows = (body.list || []).map(r => ({\n  rcept_no: r.rcept_no,\n  dart_corp_code: r.corp_code,\n  report_nm: r.report_nm,\n  flr_nm: r.flr_nm,\n  rcept_dt: r.rcept_dt,\n  is_correction: /정정/.test(r.report_nm),\n  is_major: /주요사항|최대주주|전환사채|유상증자/.test(r.report_nm),\n  raw: r,\n}));\nreturn [{ json: { status: body.status || '000', count: rows.length, rows } }];"
+      }
+    },
+    {
+      "id": "wf1-5",
+      "name": "Postgres: 공시 이벤트 Upsert",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO audit_core.stg_disclosure_event\n  (rcept_no, dart_corp_code, report_nm, flr_nm, rcept_dt, is_correction, is_major, raw)\nSELECT * FROM jsonb_to_recordset($1::jsonb) AS x(\n  rcept_no CHAR(14), dart_corp_code CHAR(8), report_nm TEXT, flr_nm TEXT,\n  rcept_dt DATE, is_correction BOOLEAN, is_major BOOLEAN, raw JSONB)\nON CONFLICT (rcept_no) DO UPDATE SET\n  report_nm = EXCLUDED.report_nm, is_correction = EXCLUDED.is_correction,\n  is_major = EXCLUDED.is_major, raw = EXCLUDED.raw, loaded_at = NOW();",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json.rows) }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "PG_CRED",
+          "name": "Postgres audit_db"
+        }
+      }
+    },
+    {
+      "id": "wf1-6",
+      "name": "IF: 정정·주요사항 존재",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1100,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.rows.filter(r => r.is_correction || r.is_major).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "wf1-7",
+      "name": "Slack: 공시 알림",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        1320,
+        -80
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#audit-alerts",
+          "mode": "name"
+        },
+        "text": "=[Aegis] 정정·주요사항 공시 {{ $json.rows.filter(r => r.is_correction || r.is_major).length }}건\n{{ $json.rows.filter(r => r.is_correction || r.is_major).slice(0,5).map(r => '• ' + r.report_nm + ' (' + r.rcept_dt + ')').join('\\n') }}"
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "SLACK_CRED",
+          "name": "Slack"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "wf1-8",
+      "name": "NoOp: 종료",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1320,
+        80
+      ],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Schedule: 매일 07:00": {
+      "main": [
+        [
+          {
+            "node": "Code: 감시 대상",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: 감시 대상": {
+      "main": [
+        [
+          {
+            "node": "HTTP: DART 공시목록",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: DART 공시목록": {
+      "main": [
+        [
+          {
+            "node": "Code: 정정·주요사항 플래그",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: 정정·주요사항 플래그": {
+      "main": [
+        [
+          {
+            "node": "Postgres: 공시 이벤트 Upsert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres: 공시 이벤트 Upsert": {
+      "main": [
+        [
+          {
+            "node": "IF: 정정·주요사항 존재",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: 정정·주요사항 존재": {
+      "main": [
+        [
+          {
+            "node": "Slack: 공시 알림",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "NoOp: 종료",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

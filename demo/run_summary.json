@@ -1,0 +1,92 @@
+{
+  "case_id": "CASE-2026-014",
+  "corpus": {
+    "emails": 311,
+    "approvals": 64,
+    "quotes": 83,
+    "invoices": 84,
+    "minutes": 20,
+    "card": 1
+  },
+  "intake": {
+    "case_id": "CASE-2026-014",
+    "collected_at": "2026-11-20T19:38:29+00:00",
+    "custodian": "forensic-intern",
+    "file_count": 563,
+    "total_bytes": 334452,
+    "by_doc_type": {
+      "APPROVAL": 64,
+      "CARD_STATEMENT": 1,
+      "EMAIL": 311,
+      "INVOICE": 84,
+      "MINUTES": 20,
+      "QUOTE": 83
+    },
+    "unique_hashes": 563,
+    "duplicate_files": 0
+  },
+  "integrity": {
+    "checked": 563,
+    "ok": 563,
+    "missing": [],
+    "changed": [],
+    "unlisted": [],
+    "result": "PASS"
+  },
+  "review": {
+    "documents": 563,
+    "by_type": {
+      "APPROVAL": 64,
+      "CARD_STATEMENT": 1,
+      "EMAIL": 311,
+      "INVOICE": 84,
+      "MINUTES": 20,
+      "QUOTE": 83
+    },
+    "exact_dup_docs": 0,
+    "near_dup_docs": 91,
+    "near_dup_clusters": 42,
+    "threads": 24,
+    "card_transactions": 206
+  },
+  "tagging": {
+    "tags": 184,
+    "by_suggestion": {
+      "HIGH": 6,
+      "LOW": 50,
+      "MEDIUM": 75,
+      "NOISE": 432
+    }
+  },
+  "console": {
+    "queue_rows": 80,
+    "path": "demo/review_console.xlsx"
+  },
+  "findings": 8,
+  "benford_mad": 0.0498,
+  "qc": {
+    "documents": 563,
+    "tag_coverage": 0.295,
+    "cluster_consistency": 0.929,
+    "clusters": 42,
+    "high_priority_docs": 14,
+    "pii_docs": 83,
+    "exact_dup_docs": 0,
+    "near_dup_docs": 91,
+    "exact_dup_only_docs": 0
+  },
+  "samples": [
+    "approvals/AP-2026-0061.txt",
+    "approvals/AP-2026-0064.txt",
+    "quotes/Q-0081.txt",
+    "quotes/Q-0082.txt",
+    "invoices/INV-0081.txt",
+    "invoices/INV-0083.txt",
+    "card/card_transactions.csv",
+    "minutes/MIN-001.txt",
+    "emails/20260302_1000_HB00307.eml",
+    "emails/20260324_1010_HB00305.eml",
+    "emails/20260325_1210_HB00306.eml",
+    "emails/20260429_1130_HB00301.eml"
+  ]
+}

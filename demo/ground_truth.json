@@ -1,0 +1,119 @@
+{
+  "case_id": "CASE-2026-014",
+  "company": "한빛물산(주)",
+  "patterns": [
+    {
+      "pattern": "PRESSURE_QUOTE",
+      "evidence": "emails/20260429_1130_HB00301.eml",
+      "note": "RE: 세영산업 견적 관련"
+    },
+    {
+      "pattern": "SPLIT_ORDER",
+      "evidence": "emails/20260503_1100_HB00303.eml",
+      "note": "한도 관련해서"
+    },
+    {
+      "pattern": "RELATED_PARTY",
+      "evidence": "emails/20260324_1010_HB00305.eml",
+      "note": "주말에 정리한 서류"
+    },
+    {
+      "pattern": "DUPLICATE_PAYMENT",
+      "evidence": "emails/20260302_1000_HB00307.eml",
+      "note": "세영산업 3월분 지급 재요청"
+    },
+    {
+      "pattern": "CARD_PRIVATE",
+      "evidence": "emails/20260320_1110_HB00310.eml",
+      "note": "법인카드 사용 내역 문의"
+    },
+    {
+      "pattern": "SPLIT_ORDER",
+      "evidence": "approvals/AP-2026-0061.txt",
+      "amount": 9450000
+    },
+    {
+      "pattern": "SPLIT_ORDER",
+      "evidence": "approvals/AP-2026-0062.txt",
+      "amount": 9380000
+    },
+    {
+      "pattern": "SPLIT_ORDER",
+      "evidence": "approvals/AP-2026-0063.txt",
+      "amount": 9620000
+    },
+    {
+      "pattern": "SPLIT_ORDER",
+      "evidence": "approvals/AP-2026-0064.txt",
+      "amount": 9510000
+    },
+    {
+      "pattern": "FAKE_QUOTE",
+      "evidence": "quotes/Q-0081.txt",
+      "amount": 9500000
+    },
+    {
+      "pattern": "FAKE_QUOTE",
+      "evidence": "quotes/Q-0082.txt",
+      "amount": 9500000
+    },
+    {
+      "pattern": "FAKE_QUOTE",
+      "evidence": "quotes/Q-0083.txt",
+      "amount": 9500000
+    },
+    {
+      "pattern": "DUPLICATE_PAYMENT",
+      "evidence": "invoices/INV-0081.txt, invoices/INV-0082.txt",
+      "amount": 8740000
+    },
+    {
+      "pattern": "DATE_MANIPULATION",
+      "evidence": "invoices/INV-0083.txt",
+      "note": "작성일자 2026-05-04 < 계약일자 2026-05-19"
+    },
+    {
+      "pattern": "DATE_MANIPULATION",
+      "evidence": "invoices/INV-0084.txt",
+      "note": "작성일자 2026-05-11 < 계약일자 2026-05-26"
+    },
+    {
+      "pattern": "CARD_PRIVATE",
+      "evidence": "card/card_transactions.csv",
+      "note": "그린필드CC 480,000원"
+    },
+    {
+      "pattern": "CARD_PRIVATE",
+      "evidence": "card/card_transactions.csv",
+      "note": "루나라운지 1,250,000원"
+    },
+    {
+      "pattern": "CARD_PRIVATE",
+      "evidence": "card/card_transactions.csv",
+      "note": "루나라운지 980,000원"
+    },
+    {
+      "pattern": "CARD_PRIVATE",
+      "evidence": "card/card_transactions.csv",
+      "note": "그린필드CC 520,000원"
+    },
+    {
+      "pattern": "CARD_PRIVATE",
+      "evidence": "card/card_transactions.csv",
+      "note": "제이스카이 1,430,000원"
+    },
+    {
+      "pattern": "CARD_PRIVATE",
+      "evidence": "card/card_transactions.csv",
+      "note": "그린필드CC 460,000원"
+    }
+  ],
+  "files": {
+    "emails": 311,
+    "approvals": 64,
+    "quotes": 83,
+    "invoices": 84,
+    "minutes": 20,
+    "card": 1
+  }
+}

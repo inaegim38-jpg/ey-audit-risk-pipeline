@@ -1,0 +1,27 @@
+// Power BI DAX measures — 테이블: vw_pbi_tx_summary (Summary), dq_anomaly_findings (Findings)
+Total Tx Count = SUM ( Summary[total_tx_count] )
+
+Total Tx Amount = SUM ( Summary[total_tx_amount] )
+
+DQ Error Tx Count = SUM ( Summary[dq_error_tx_count] )
+
+DQ Error Rate (%) = DIVIDE ( [DQ Error Tx Count], [Total Tx Count], 0 ) * 100
+
+Anomaly Issue Count =
+CALCULATE ( COUNTROWS ( Findings ), Findings[finding_type] = "ANOMALY_RISK" )
+
+Anomaly Exposure Amount = SUM ( Summary[anomaly_exposure_amount] )
+
+Open Critical Issues =
+CALCULATE (
+    COUNTROWS ( Findings ),
+    Findings[severity] = "CRITICAL",
+    Findings[issue_status] IN { "OPEN", "IN_REVIEW" }
+)
+
+Issue Resolution Rate (%) =
+DIVIDE (
+    CALCULATE ( COUNTROWS ( Findings ), Findings[issue_status] IN { "RESOLVED", "FALSE_POSITIVE" } ),
+    COUNTROWS ( Findings ),
+    0
+) * 100

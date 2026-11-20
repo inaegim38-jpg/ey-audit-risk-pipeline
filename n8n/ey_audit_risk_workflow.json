@@ -1,0 +1,388 @@
+{
+  "id": "eyAuditRiskWf01",
+  "name": "EY Audit Risk Pipeline",
+  "nodes": [
+    {
+      "id": "n1",
+      "name": "Webhook (audit-risk-ingest)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "audit-risk-ingest",
+        "options": {}
+      },
+      "webhookId": "audit-risk-ingest"
+    },
+    {
+      "id": "n2",
+      "name": "Schedule (6h)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        200
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "n3",
+      "name": "Code: 정규화·스키마검증",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const out = [];\nconst body = $input.first().json.body ?? $input.first().json;\nconst rows = Array.isArray(body) ? body : (Array.isArray(body.rows) ? body.rows : []);\nconst batchId = 'BATCH_N8N_' + new Date().toISOString().replace(/[-:T.Z]/g,'').slice(0,14);\nrows.forEach((r, i) => {\n  const errs = [];\n  const amt = Number(r.tx_amount);\n  if (!r.tx_id) errs.push('tx_id 누락');\n  if (r.tx_amount === undefined || r.tx_amount === null || r.tx_amount === '' || Number.isNaN(amt)) errs.push('tx_amount 파싱 불가');\n  const ts = new Date(r.tx_timestamp);\n  if (!r.tx_timestamp || isNaN(ts.getTime())) errs.push('tx_timestamp 파싱 불가');\n  out.push({ json: {\n    batch_id: batchId, row_no: i + 1, schema_error: errs.length > 0, error_detail: errs.join('; '),\n    tx_id: r.tx_id ?? null, tx_timestamp: isNaN(ts.getTime()) ? null : ts.toISOString(),\n    posting_date: isNaN(ts.getTime()) ? null : ts.toISOString().slice(0,10),\n    account_id: r.account_id ?? null, merchant_id: r.merchant_id ?? null,\n    merchant_category: r.merchant_category ?? null, tx_type: r.tx_type ?? 'EXPENSE',\n    tx_amount: Number.isNaN(amt) ? null : amt, department_code: r.department_code ?? null,\n    evidence_doc_no: r.evidence_doc_no ?? null, raw_payload: JSON.stringify(r)\n  }});\n});\nif (out.length === 0) out.push({ json: { batch_id: batchId, row_no: 0, schema_error: false, empty_batch: true } });\nreturn out;"
+      }
+    },
+    {
+      "id": "n4",
+      "name": "If: 스키마 오류?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        500,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.schema_error }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "n5",
+      "name": "Postgres: DQ_00 오류 격리",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        760,
+        -100
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO audit_risk.dq_anomaly_findings (finding_key,batch_id,run_id,rule_id,tx_id,finding_type,severity,risk_score,detected_amount,expected_amount,discrepancy_amount,detail_message) VALUES ('DQ_00:' || $1::text || ':' || $2::text, $1::text, 'N8N_INGEST','DQ_00', COALESCE(NULLIF($3::text,''),'ROW_'||$2::text),'DQ_SCHEMA','HIGH',70,0,0,0,$4::text) ON CONFLICT (finding_key) DO UPDATE SET detail_message=EXCLUDED.detail_message, updated_at=NOW();",
+        "options": {
+          "queryReplacement": "={{ [$json.batch_id, $json.row_no, $json.tx_id ?? '', $json.error_detail] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "PG_CRED",
+          "name": "Postgres audit_db"
+        }
+      }
+    },
+    {
+      "id": "n6",
+      "name": "Postgres: 원장 Upsert",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        760,
+        100
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO audit_risk.raw_transactions (tx_id,batch_id,tx_timestamp,posting_date,account_id,merchant_id,merchant_category,tx_type,tx_amount,department_code,evidence_doc_no,source_dataset) VALUES ($1,$2,$3::timestamptz,$4::date,$5,$6,$7,$8,$9::numeric,$10,$11,'N8N_WEBHOOK') ON CONFLICT (tx_id) DO UPDATE SET tx_amount=EXCLUDED.tx_amount, department_code=EXCLUDED.department_code;",
+        "options": {
+          "queryReplacement": "={{ [$json.tx_id,$json.batch_id,$json.tx_timestamp,$json.posting_date,$json.account_id,$json.merchant_id,$json.merchant_category,$json.tx_type,$json.tx_amount,$json.department_code,$json.evidence_doc_no] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "PG_CRED",
+          "name": "Postgres audit_db"
+        }
+      }
+    },
+    {
+      "id": "n7",
+      "name": "Postgres: 9대 검증엔진",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1020,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH run_meta AS (\n    SELECT 'RUN_' || TO_CHAR(NOW(), 'YYYYMMDD_HH24MISS') AS run_id\n),\ndetected_issues AS (\n    SELECT 'DQ_01:' || t.tx_id AS finding_key, t.batch_id, rm.run_id, 'DQ_01' AS rule_id,\n           t.tx_id, t.evidence_doc_no, 'DQ_INTEGRITY' AS finding_type, 'HIGH' AS severity,\n           75.00::NUMERIC(5,2) AS risk_score, COALESCE(t.tx_amount, 0) AS detected_amount, 0::NUMERIC AS expected_amount, 0::NUMERIC AS discrepancy_amount,\n           '필수값 누락: amount=' || COALESCE(t.tx_amount::TEXT, 'NULL') || ', dept=' || COALESCE(t.department_code, 'NULL') AS detail_message\n    FROM audit_risk.raw_transactions t CROSS JOIN run_meta rm\n    WHERE t.tx_amount IS NULL OR t.tx_timestamp IS NULL OR t.account_id IS NULL OR t.department_code IS NULL\n\n    UNION ALL\n    SELECT 'DQ_02:' || t.tx_id, t.batch_id, rm.run_id, 'DQ_02',\n           t.tx_id, t.evidence_doc_no, 'DQ_INTEGRITY', 'HIGH',\n           80.00, t.tx_amount, 0, ABS(t.tx_amount),\n           '비정상 0원 이하 금액(' || t.tx_amount || '원, 유형=' || t.tx_type || ')'\n    FROM audit_risk.raw_transactions t CROSS JOIN run_meta rm\n    WHERE t.tx_type NOT IN ('REFUND', 'CANCEL') AND t.tx_amount <= 0\n\n    UNION ALL\n    SELECT 'DQ_03:' || d.tx_id, d.batch_id, rm.run_id, 'DQ_03',\n           d.tx_id, d.evidence_doc_no, 'DQ_INTEGRITY', 'CRITICAL',\n           95.00, d.tx_amount, 0, d.tx_amount,\n           '중복 거래/증빙 파일 해시 탐지 (건수=' || d.dup_cnt || ', hash=' || COALESCE(d.file_hash, 'N/A') || ')'\n    FROM (\n        SELECT t.*, e.file_hash,\n               GREATEST(\n                   COUNT(*) OVER (PARTITION BY t.account_id, t.merchant_id, t.tx_amount, t.tx_timestamp),\n                   CASE WHEN e.file_hash IS NOT NULL THEN COUNT(*) OVER (PARTITION BY e.file_hash) ELSE 1 END\n               ) AS dup_cnt\n        FROM audit_risk.raw_transactions t\n        LEFT JOIN audit_risk.raw_evidences e ON t.tx_id = e.tx_id\n    ) d CROSS JOIN run_meta rm\n    WHERE d.dup_cnt > 1\n\n    UNION ALL\n    SELECT 'EV_01:' || t.tx_id, t.batch_id, rm.run_id, 'EV_01',\n           t.tx_id, t.evidence_doc_no, 'EVIDENCE_MATCH', 'CRITICAL',\n           92.00, t.tx_amount, 0, t.tx_amount,\n           '고액 거래(' || t.tx_amount || '원) 증빙 문서 미매칭'\n    FROM audit_risk.raw_transactions t\n    LEFT JOIN audit_risk.raw_evidences e ON t.tx_id = e.tx_id OR (t.evidence_doc_no IS NOT NULL AND t.evidence_doc_no = e.evidence_doc_no)\n    CROSS JOIN run_meta rm\n    WHERE t.tx_amount >= 500000 AND e.evidence_id IS NULL\n\n    UNION ALL\n    SELECT 'EV_02:' || t.tx_id, t.batch_id, rm.run_id, 'EV_02',\n           t.tx_id, e.evidence_doc_no, 'EVIDENCE_MATCH', 'CRITICAL',\n           94.00, t.tx_amount, e.evidence_amount, ABS(t.tx_amount - e.evidence_amount),\n           '금액 불일치: 원장(' || t.tx_amount || ') vs 증빙(' || e.evidence_amount || ')'\n    FROM audit_risk.raw_transactions t\n    JOIN audit_risk.raw_evidences e ON t.tx_id = e.tx_id\n    CROSS JOIN run_meta rm\n    WHERE ABS(t.tx_amount - e.evidence_amount) > 100\n\n    UNION ALL\n    SELECT 'EV_03:' || t.tx_id, t.batch_id, rm.run_id, 'EV_03',\n           t.tx_id, e.evidence_doc_no, 'EVIDENCE_MATCH', 'MEDIUM',\n           60.00, t.tx_amount, e.evidence_amount, 0,\n           '일자 괴리: 전기일(' || t.posting_date || ') vs 증빙발행일(' || e.issue_date || ')'\n    FROM audit_risk.raw_transactions t\n    JOIN audit_risk.raw_evidences e ON t.tx_id = e.tx_id\n    CROSS JOIN run_meta rm\n    WHERE e.issue_date > t.posting_date + INTERVAL '7 days' OR (t.posting_date - e.issue_date) > 30\n\n    UNION ALL\n    SELECT 'AN_01:' || t.tx_id, t.batch_id, rm.run_id, 'AN_01',\n           t.tx_id, t.evidence_doc_no, 'ANOMALY_RISK', 'HIGH',\n           LEAST(99.00, 70.00 + ((t.tx_amount - b.avg_amount) / NULLIF(b.stddev_amount, 0)) * 2.5)::NUMERIC(5,2),\n           t.tx_amount, b.avg_amount, (t.tx_amount - b.avg_amount),\n           'Z-Score 이상치: ' || ROUND((t.tx_amount - b.avg_amount) / NULLIF(b.stddev_amount, 0), 2) || 'σ'\n    FROM audit_risk.raw_transactions t\n    JOIN audit_risk.baseline_stats b ON t.merchant_category = b.merchant_category\n    CROSS JOIN run_meta rm\n    WHERE t.tx_amount > 0 AND (t.tx_amount - b.avg_amount) / NULLIF(b.stddev_amount, 0) >= 3.0\n\n    UNION ALL\n    SELECT 'AN_02:' || t.tx_id, t.batch_id, rm.run_id, 'AN_02',\n           t.tx_id, t.evidence_doc_no, 'ANOMALY_RISK', 'CRITICAL',\n           98.00, t.tx_amount, 1000000, sc.daily_sum - 1000000,\n           '한도 회피 분할결제 의심: 동일 일자/가맹점 ' || sc.tx_cnt || '건 합계 ' || sc.daily_sum || '원'\n    FROM (\n        SELECT account_id, merchant_id, posting_date, COUNT(*) AS tx_cnt, SUM(tx_amount) AS daily_sum\n        FROM audit_risk.raw_transactions\n        WHERE tx_amount BETWEEN 700000 AND 999999\n        GROUP BY account_id, merchant_id, posting_date\n        HAVING COUNT(*) >= 2 AND SUM(tx_amount) >= 1000000\n    ) sc\n    JOIN audit_risk.raw_transactions t\n      ON t.account_id = sc.account_id AND t.merchant_id = sc.merchant_id AND t.posting_date = sc.posting_date\n    CROSS JOIN run_meta rm\n    WHERE t.tx_amount BETWEEN 700000 AND 999999\n\n    UNION ALL\n    SELECT 'AN_03:' || t.tx_id, t.batch_id, rm.run_id, 'AN_03',\n           t.tx_id, t.evidence_doc_no, 'ANOMALY_RISK', 'MEDIUM',\n           65.00, t.tx_amount, 500000, t.tx_amount,\n           '업무 외 시간대 고액 결제(' || TO_CHAR(t.tx_timestamp AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD HH24:MI Dy') || ')'\n    FROM audit_risk.raw_transactions t CROSS JOIN run_meta rm\n    WHERE t.tx_amount >= 500000\n      AND (\n          EXTRACT(HOUR FROM t.tx_timestamp AT TIME ZONE 'Asia/Seoul') >= 23\n          OR EXTRACT(HOUR FROM t.tx_timestamp AT TIME ZONE 'Asia/Seoul') < 5\n          OR EXTRACT(ISODOW FROM t.tx_timestamp AT TIME ZONE 'Asia/Seoul') IN (6, 7)\n      )\n)\nINSERT INTO audit_risk.dq_anomaly_findings\n(finding_key, batch_id, run_id, rule_id, tx_id, evidence_doc_no, finding_type, severity, risk_score, detected_amount, expected_amount, discrepancy_amount, detail_message)\nSELECT finding_key, batch_id, run_id, rule_id, tx_id, evidence_doc_no, finding_type, severity, risk_score, detected_amount, expected_amount, discrepancy_amount, detail_message\nFROM detected_issues\nON CONFLICT (finding_key) DO UPDATE SET\n    run_id = EXCLUDED.run_id,\n    risk_score = EXCLUDED.risk_score,\n    detected_amount = EXCLUDED.detected_amount,\n    discrepancy_amount = EXCLUDED.discrepancy_amount,\n    detail_message = EXCLUDED.detail_message,\n    updated_at = NOW();\nSELECT COUNT(*) FILTER (WHERE severity IN ('CRITICAL','HIGH') AND issue_status='OPEN') AS critical_high_open, COUNT(*) AS total_findings, MAX(run_id) AS run_id FROM audit_risk.dq_anomaly_findings;",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "PG_CRED",
+          "name": "Postgres audit_db"
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "n8",
+      "name": "If: Critical/High > 0",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1280,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c2",
+              "leftValue": "={{ Number($json.critical_high_open) }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "n9",
+      "name": "Slack Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1540,
+        -100
+      ],
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#audit-risk-alert",
+          "mode": "name"
+        },
+        "text": "=🚨 감사 리스크 경보: CRITICAL/HIGH 미해결 {{ $json.critical_high_open }}건 (run {{ $json.run_id }})",
+        "otherOptions": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "SLACK_CRED",
+          "name": "Slack"
+        }
+      }
+    },
+    {
+      "id": "n10",
+      "name": "HTTP: Power BI Refresh",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1800,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.powerbi.com/v1.0/myorg/groups/{{GROUP_ID}}/datasets/{{DATASET_ID}}/refreshes",
+        "sendBody": false,
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "n11",
+      "name": "Postgres: pbi_refresh_history",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2060,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO audit_risk.pbi_refresh_history (run_id,dataset_id,status,http_status,message) VALUES ($1::text,'DATASET_ID',$2::text,$3::int,$4::text);",
+        "options": {
+          "queryReplacement": "={{ [$('Postgres: 9대 검증엔진').first().json.run_id, ($json.statusCode ?? 0) < 300 ? 'REQUESTED' : 'FAILED', $json.statusCode ?? 0, JSON.stringify($json.body ?? $json.error ?? '')] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "PG_CRED",
+          "name": "Postgres audit_db"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook (audit-risk-ingest)": {
+      "main": [
+        [
+          {
+            "node": "Code: 정규화·스키마검증",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule (6h)": {
+      "main": [
+        [
+          {
+            "node": "Postgres: 9대 검증엔진",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: 정규화·스키마검증": {
+      "main": [
+        [
+          {
+            "node": "If: 스키마 오류?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: 스키마 오류?": {
+      "main": [
+        [
+          {
+            "node": "Postgres: DQ_00 오류 격리",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Postgres: 원장 Upsert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres: DQ_00 오류 격리": {
+      "main": [
+        [
+          {
+            "node": "Postgres: 9대 검증엔진",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres: 원장 Upsert": {
+      "main": [
+        [
+          {
+            "node": "Postgres: 9대 검증엔진",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres: 9대 검증엔진": {
+      "main": [
+        [
+          {
+            "node": "If: Critical/High > 0",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Critical/High > 0": {
+      "main": [
+        [
+          {
+            "node": "Slack Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP: Power BI Refresh",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack Alert": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Power BI Refresh",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Power BI Refresh": {
+      "main": [
+        [
+          {
+            "node": "Postgres: pbi_refresh_history",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}

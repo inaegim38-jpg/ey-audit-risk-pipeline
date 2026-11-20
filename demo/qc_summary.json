@@ -3,7 +3,7 @@
   "tag_coverage": 0.295,
   "cluster_consistency": 0.929,
   "clusters": 42,
-  "high_priority_docs": 14,
+  "high_priority_docs": 15,
   "pii_docs": 83,
   "exact_dup_docs": 0,
   "near_dup_docs": 91,

@@ -1,0 +1,256 @@
+{
+  "id": "ey-forensic-case-pipeline",
+  "name": "[EY Forensic] 케이스 파이프라인 → Postgres 적재",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Seoul",
+    "saveManualExecutions": true
+  },
+  "tags": [
+    {
+      "name": "forensic"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "f1",
+      "name": "Schedule: 매일 07:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "f2",
+      "name": "Execute Command: 파이프라인 실행",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "command": "cd /data/ey-audit-risk-pipeline && python3 -m forensic.run_demo --out demo > demo/last_run.log 2>&1 && python3 -m forensic.export_pg --db demo/case.db",
+        "executeOnce": false
+      },
+      "notes": "n8n 호스트에 저장소가 마운트된 경로로 수정. 로그는 demo/last_run.log, stdout은 NDJSON만 남긴다."
+    },
+    {
+      "id": "f3",
+      "name": "Code: NDJSON 파싱",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const stdout = $input.first().json.stdout ?? '';\nconst lines = stdout.split('\\n').map((l) => l.trim()).filter(Boolean);\nif (lines.length === 0) {\n  throw new Error('export_pg 출력이 비었습니다. demo/last_run.log 를 확인하세요.');\n}\nreturn lines.map((line) => ({ json: JSON.parse(line) }));"
+      }
+    },
+    {
+      "id": "f4",
+      "name": "Postgres: 파인딩 Upsert",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        720,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO forensic.findings (finding_id, case_id, category, title, severity, amount, item_count, description, method, limitation, status, created_at) VALUES ($1,$2,$3,$4,$5,$6::numeric,$7::int,$8,$9,$10,$11,$12::timestamptz) ON CONFLICT (finding_id) DO UPDATE SET severity = EXCLUDED.severity, amount = EXCLUDED.amount, item_count = EXCLUDED.item_count, description = EXCLUDED.description, limitation = EXCLUDED.limitation, status = EXCLUDED.status;",
+        "options": {
+          "queryReplacement": "={{ [$json.finding_id,$json.case_id,$json.category,$json.title,$json.severity,$json.amount,$json.item_count,$json.description,$json.method,$json.limitation,$json.status,$json.created_at] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "PG_CRED",
+          "name": "Postgres audit_db"
+        }
+      },
+      "notes": "case_id 는 forensic.cases 에 먼저 존재해야 한다(08 스키마의 케이스 등록부)."
+    },
+    {
+      "id": "f5",
+      "name": "Code: 심각도 요약",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all().map((i) => i.json);\nconst by = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };\nlet amount = 0;\nlet uncited = 0;\nfor (const row of items) {\n  by[row.severity] = (by[row.severity] ?? 0) + 1;\n  amount += Number(row.amount ?? 0);\n  if (Number(row.evidence_count ?? 0) === 0) uncited += 1;\n}\nconst message = `[EY Forensic] 파인딩 ${items.length}건 | CRITICAL ${by.CRITICAL} · HIGH ${by.HIGH} · MEDIUM ${by.MEDIUM} | 금액 ${amount.toLocaleString('ko-KR')}원 | 증거 미연결 ${uncited}건`;\nreturn [{ json: { finding_count: items.length, critical_count: by.CRITICAL, high_count: by.HIGH, medium_count: by.MEDIUM, total_amount: amount, uncited_count: uncited, message } }];"
+      }
+    },
+    {
+      "id": "f6",
+      "name": "If: CRITICAL 존재?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1200,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "fc1",
+              "leftValue": "={{ Number($json.critical_count) }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "f7",
+      "name": "Slack: 포렌식 경보",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1440,
+        200
+      ],
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#forensic-case-alert",
+          "mode": "name"
+        },
+        "text": "=🚨 {{ $json.message }}",
+        "otherOptions": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "SLACK_CRED",
+          "name": "Slack"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "id": "f8",
+      "name": "NoOp: 종료",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        420
+      ],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Schedule: 매일 07:00": {
+      "main": [
+        [
+          {
+            "node": "Execute Command: 파이프라인 실행",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Command: 파이프라인 실행": {
+      "main": [
+        [
+          {
+            "node": "Code: NDJSON 파싱",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: NDJSON 파싱": {
+      "main": [
+        [
+          {
+            "node": "Postgres: 파인딩 Upsert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres: 파인딩 Upsert": {
+      "main": [
+        [
+          {
+            "node": "Code: 심각도 요약",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: 심각도 요약": {
+      "main": [
+        [
+          {
+            "node": "If: CRITICAL 존재?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: CRITICAL 존재?": {
+      "main": [
+        [
+          {
+            "node": "Slack: 포렌식 경보",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "NoOp: 종료",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack: 포렌식 경보": {
+      "main": [
+        [
+          {
+            "node": "NoOp: 종료",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

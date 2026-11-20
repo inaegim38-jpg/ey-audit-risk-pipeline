@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import math
 import re
@@ -81,9 +82,12 @@ def _parse_fields(body: str) -> dict:
 
 
 class Registry:
-    def __init__(self) -> None:
+    def __init__(self, by_path: dict[str, str] | None = None) -> None:
         self.items: list[dict] = []
         self.links: list[dict] = []
+        # rel_path → evidence_id. 카드내역처럼 파일 1건에서 여러 거래가 나오는 경우
+        # evidence_id 없이 행이 여러 개 생기는 것을 막는다.
+        self.by_path = by_path or {}
 
     def add(self, category: str, title: str, severity: str, amount: int, count: int,
             description: str, method: str, limitation: str, evidence: list[tuple[str, str, str]]) -> str:
@@ -94,15 +98,38 @@ class Registry:
             "method": method, "limitation": limitation,
             "created_at": datetime.now().isoformat(timespec="seconds"),
         })
+        # 같은 파일을 가리키는 인용은 1행으로 합치고, 개별 건수는 note에 남긴다.
+        merged: dict[str, dict] = {}
         for ev_id, rel_path, note in evidence:
-            self.links.append({"finding_id": fid, "evidence_id": ev_id, "rel_path": rel_path, "note": note})
+            eid = ev_id or self.by_path.get(rel_path, "")
+            row = merged.get(rel_path)
+            if row is None:
+                merged[rel_path] = {"evidence_id": eid, "notes": [note]}
+            else:
+                row["notes"].append(note)
+                if not row["evidence_id"] and eid:
+                    row["evidence_id"] = eid
+        for rel_path, row in merged.items():
+            notes = row["notes"]
+            note = notes[0] if len(notes) == 1 else f"{notes[0]} 외 {len(notes) - 1}건"
+            self.links.append({"finding_id": fid, "evidence_id": row["evidence_id"],
+                               "rel_path": rel_path, "note": note})
         return fid
+
+
+def _manifest_index(db_path: Path) -> dict[str, str]:
+    """수집 매니페스트에서 rel_path → evidence_id 색인을 만든다."""
+    path = db_path.parent / "evidence" / "evidence_manifest.csv"
+    if not path.exists():
+        return {}
+    with path.open(encoding="utf-8") as fh:
+        return {r["rel_path"]: r["evidence_id"] for r in csv.DictReader(fh)}
 
 
 def analyze(db_path: Path) -> dict:
     conn = sqlite3.connect(db_path)
     conn.executescript(FINDING_SCHEMA)
-    reg = Registry()
+    reg = Registry(_manifest_index(db_path))
 
     docs = conn.execute("SELECT doc_id, doc_type, rel_path, doc_date, subject, body FROM documents").fetchall()
     by_type: dict[str, list] = defaultdict(list)

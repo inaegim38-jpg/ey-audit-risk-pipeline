@@ -7,3 +7,8 @@ n8n/pg_credential.json
 *.pbix
 .env
 ~$*
+*.csv
+!review_sheet.csv
+*.xlsx
+!review_sheet.xlsx
+SEOUL_EXPENSE_PROFILE.md

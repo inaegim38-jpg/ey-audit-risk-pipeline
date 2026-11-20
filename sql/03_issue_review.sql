@@ -1,4 +1,4 @@
-﻿-- ============================================================================
+-- ============================================================================
 -- 03_issue_review.sql : 이슈 검토 상태 추적 (OPEN → IN_REVIEW → RESOLVED / FALSE_POSITIVE)
 -- 01, 02 실행 후에 실행. 여러 번 실행해도 안전(멱등). 01은 스키마를 DROP하므로 01 이후 다시 실행할 것.
 -- ============================================================================
@@ -50,7 +50,8 @@ SELECT
     f.detail_message,
     f.issue_status,
     f.reviewer,
-    f.review_memo
+    f.review_memo,
+    COALESCE(t.source_dataset, 'UNKNOWN') AS source_dataset
 FROM audit_risk.dq_anomaly_findings f
 LEFT JOIN audit_risk.raw_transactions t ON t.tx_id = f.tx_id
 WHERE f.issue_status IN ('OPEN', 'IN_REVIEW')

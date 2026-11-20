@@ -6,3 +6,4 @@ download_banksim.py
 n8n/pg_credential.json
 *.pbix
 .env
+~$*

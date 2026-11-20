@@ -204,31 +204,21 @@
           "id": "SLACK_CRED",
           "name": "Slack"
         }
-      }
+      },
+      "disabled": true
     },
     {
       "id": "n10",
-      "name": "HTTP: Power BI Refresh",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "name": "Power BI Refresh (Mock)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         1800,
         0
       ],
       "parameters": {
-        "method": "POST",
-        "url": "https://api.powerbi.com/v1.0/myorg/groups/{{GROUP_ID}}/datasets/{{DATASET_ID}}/refreshes",
-        "sendBody": false,
-        "options": {
-          "response": {
-            "response": {
-              "neverError": true,
-              "fullResponse": true
-            }
-          }
-        }
-      },
-      "continueOnFail": true
+        "jsCode": "// 로컬 검증용 Mock: 실제 환경에서는 이 노드를 HTTP Request(POST https://api.powerbi.com/v1.0/myorg/groups/{GROUP_ID}/datasets/{DATASET_ID}/refreshes)로 교체\nreturn [{ json: { statusCode: 202, body: { mock: true, message: 'Power BI refresh accepted (mock)' } } }];"
+      }
     },
     {
       "id": "n11",
@@ -251,6 +241,19 @@
           "id": "PG_CRED",
           "name": "Postgres audit_db"
         }
+      }
+    },
+    {
+      "id": "n12",
+      "name": "Merge: 격리+원장 합류",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        900,
+        0
+      ],
+      "parameters": {
+        "mode": "append"
       }
     }
   ],
@@ -310,7 +313,7 @@
       "main": [
         [
           {
-            "node": "Postgres: 9대 검증엔진",
+            "node": "Merge: 격리+원장 합류",
             "type": "main",
             "index": 0
           }
@@ -321,9 +324,9 @@
       "main": [
         [
           {
-            "node": "Postgres: 9대 검증엔진",
+            "node": "Merge: 격리+원장 합류",
             "type": "main",
-            "index": 0
+            "index": 1
           }
         ]
       ]
@@ -350,7 +353,7 @@
         ],
         [
           {
-            "node": "HTTP: Power BI Refresh",
+            "node": "Power BI Refresh (Mock)",
             "type": "main",
             "index": 0
           }
@@ -361,18 +364,29 @@
       "main": [
         [
           {
-            "node": "HTTP: Power BI Refresh",
+            "node": "Power BI Refresh (Mock)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "HTTP: Power BI Refresh": {
+    "Power BI Refresh (Mock)": {
       "main": [
         [
           {
             "node": "Postgres: pbi_refresh_history",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge: 격리+원장 합류": {
+      "main": [
+        [
+          {
+            "node": "Postgres: 9대 검증엔진",
             "type": "main",
             "index": 0
           }

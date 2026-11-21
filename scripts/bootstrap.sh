@@ -29,7 +29,8 @@ for sql in \
   sql/18_source_registry.sql \
   sql/19_sanction_registry.sql \
   sql/20_procurement_fact.sql \
-  sql/21_procurement_rules.sql; do
+  sql/21_procurement_rules.sql \
+  sql/22_procurement_evidence.sql; do
   echo "[bootstrap] $sql"
   psql --set ON_ERROR_STOP=1 --file="$sql"
 done

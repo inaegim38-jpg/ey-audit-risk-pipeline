@@ -100,6 +100,24 @@ def get_finding(finding_id: str) -> dict[str, Any] | None:
         ORDER BY created_at DESC
         LIMIT 10
     """, (finding["engagement_id"],))
+    finding["procurement"] = []
+    if finding["rule_id"].startswith("PPS-"):
+        source_payload_id = finding.get("detail", {}).get("source_payload_id")
+        bid_notice_no = finding.get("detail", {}).get("bid_notice_no")
+        finding["procurement"] = fetch_all("""
+            SELECT p.bid_notice_no, p.bid_notice_ord, p.notice_name,
+                   p.business_division, p.notice_status, p.notice_date,
+                   p.bid_begin_at, p.bid_close_at, p.opening_at,
+                   p.demand_agency_name, p.notice_agency_name,
+                   p.estimated_amount, p.presumption_price, p.contract_method,
+                   p.source_locator, p.source_payload_id,
+                   s.payload_sha256, s.request_fingerprint,
+                   s.period_start, s.period_end
+            FROM audit_core.fact_procurement_event p
+            JOIN audit_core.stg_source_payload s ON s.payload_id = p.source_payload_id
+            WHERE p.source_payload_id = %s AND p.bid_notice_no = %s
+            ORDER BY p.bid_notice_ord
+        """, (source_payload_id, bid_notice_no))
     return finding
 
 def update_disposition(finding_id: str, disposition: str, reviewer_id: str) -> dict[str, Any] | None:

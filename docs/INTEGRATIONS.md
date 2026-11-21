@@ -53,6 +53,7 @@ python3 scripts/source_adapters.py procurement-bid \
 - live verification: DART 100건·ECOS 일별 환율 59건을 raw payload로 저장하고 각각 staging/fact에 100% lineage 연결
 - live verification: 조달청 나라장터 입찰공고 API에서 2026-11-14 하루 범위 58건을 수신하고 `fact_procurement_event`에 58건 정규화·lineage 연결
 - procurement candidate rules: `SELECT * FROM audit_core.run_procurement_rules('ENG-2026-001');` 실행 시 PPS-01 7건, PPS-02 4건, PPS-03 5건 후보 생성; 모두 `OPEN`이며 HITL disposition 전 확정하지 않음
+- procurement 3-Pane: `EV-PPS-*` raw payload evidence와 SHA-256·공고번호·공식 locator를 `finding_evidence`와 detail pane에서 함께 조회
 - 로컬 샌드박스: credential은 세션 runtime으로만 주입했으며 파일·로그·저장소에는 저장하지 않음
 - 합성 seed: 룰·ECL·AI QA 계약 테스트용으로만 사용
 

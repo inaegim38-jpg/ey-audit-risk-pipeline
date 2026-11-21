@@ -25,10 +25,27 @@ python3 scripts/integration_preflight.py --integration dart
 
 Phase 3 골드셋 하네스는 모델 API 없이도 평가 계약을 검증한다. 실제 AI 추출을 활성화할 때만 선택한 모델 provider key를 runtime secret으로 추가한다. 모델 출력은 반드시 `fact_ai_qa_run`에 모델 버전·프롬프트 버전·원문 해시와 함께 적재하고, 이후 `run_ai_qa_goldset()`을 통과해야 사람 검토 큐로 전달한다.
 
+## DART·ECOS source adapter
+
+`sql/18_source_registry.sql`은 source system registry와 `stg_source_payload` raw lineage를 만든다. 실제 API 응답은 정규화 전에 request fingerprint와 payload SHA-256으로 저장한다.
+
+```bash
+python3 scripts/source_adapters.py dart \
+  --corp-code 00123456 --start 20260101 --end 20260331 \
+  --engagement-id ENG-2026-001
+
+python3 scripts/source_adapters.py ecos \
+  --stat-code 731Y001 --cycle D --start 2026-01-01 --end 2026-03-31 \
+  --item 0000001 --engagement-id ENG-2026-001
+```
+
+위 명령은 `DART_API_KEY` 또는 `ECOS_API_KEY`가 없으면 HTTP 요청 전에 실패한다. 성공 시에도 key는 fingerprint, 로그, raw payload에 포함하지 않는다. DART list endpoint의 `crtfc_key`, `corp_code`, 기간·페이지 파라미터는 공식 개발자 가이드 기준이며, ECOS는 공식 API의 `StatisticSearch/{key}/json/kr/...` 경로 계약을 사용한다.
+
 ## 현재 상태
 
 - WF-1: OpenDART HTTP node와 `DART_API_KEY` 참조 구현 완료
 - WF-1: credential/target preflight와 fail-closed 동작 구현 완료
+- DART·ECOS: raw payload adapter와 source registry 구현 완료; 실제 key 주입 후 end-to-end 호출 대상
 - 로컬 샌드박스: 실제 DART key가 주입되지 않아 외부 호출은 의도적으로 실행하지 않음
 - 합성 seed: 룰·ECL·AI QA 계약 테스트용으로만 사용
 

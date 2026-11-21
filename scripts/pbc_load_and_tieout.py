@@ -126,6 +126,9 @@ def run_tieouts(engagement_id: str) -> None:
         cur.execute("SELECT rule_id, status, difference, item_count FROM audit_core.pbc_tieout_result WHERE engagement_id=%s ORDER BY rule_id", (engagement_id,))
         for row in cur.fetchall():
             print(f"{row[0]}: status={row[1]}, difference={row[2]}, items={row[3]}")
+        cur.execute("SELECT * FROM audit_core.run_pbc_findings(%s)", (engagement_id,))
+        for row in cur.fetchall():
+            print(f"{row[0]}: candidates={row[1]}, requests={row[2]}")
 
 
 def main() -> int:

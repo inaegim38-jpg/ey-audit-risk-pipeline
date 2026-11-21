@@ -91,6 +91,8 @@ python3 scripts/pbc_load_and_tieout.py tieout \
 
 `sql/24_pbc_tieout_facts.sql`은 GL line, TB balance, AR item, contract fact와 `pbc_tieout_result`를 만든다. 현재 `PBC-TB-01`은 계정별 GL–TB debit/credit aggregate를 비교해 `PASSED`/`FAILED`를 기록하고, `PBC-AR-01`과 `PBC-CON-01`은 control-account 또는 상세 계약 대사 계약이 들어오기 전까지 총액·행수와 함께 `PENDING`으로 남긴다. 모든 적재와 tie-out 결과는 batch UUID와 파일 hash로 원본 intake에 연결된다.
 
+`sql/25_pbc_finding_linkage.sql`의 `audit_core.run_pbc_findings()`는 `FAILED` 결과만 `fact_risk_finding`에 candidate로 생성하고, 관련 GL/TB 원본 batch evidence를 `finding_evidence`에 연결한다. `PENDING` 결과는 `pbc_request_queue`에 추가자료 요청으로 남기며 finding으로 확정하지 않는다. 따라서 AI·룰은 후보와 요청만 만들고, reviewer가 3-Pane에서 원본 hash·대사 상세·추가자료를 확인한 뒤 HITL disposition을 기록한다.
+
 ## 공정위·조달 공공데이터 계약
 
 공정위·조달 제재/처분의 공통 정규화 대상은 `fact_sanction_event`이며, 원천 응답은 먼저 `stg_source_payload`에 저장한다. 필수 lineage는 `source_payload_id`, `source_code`, `source_record_id`, 사업자번호/법인번호, 처분일, 제재유형, 사건번호, 원문 locator다. 공공데이터포털 인증키가 없을 때는 호출하지 않고 실패한다.

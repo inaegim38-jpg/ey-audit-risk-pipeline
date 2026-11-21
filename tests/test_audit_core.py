@@ -19,15 +19,16 @@ def scalar(sql, params=()):
         return cur.fetchone()[0]
 
 
-def test_rule_catalog_preserves_14_legacy_and_adds_3_procurement_rules():
-    assert scalar("SELECT count(*) FROM audit_core.rule_catalog WHERE is_active") == 17
+def test_rule_catalog_preserves_14_legacy_and_adds_procurement_and_pbc_rules():
+    assert scalar("SELECT count(*) FROM audit_core.rule_catalog WHERE is_active") == 20
     assert scalar("SELECT count(*) FROM audit_core.rule_catalog WHERE is_active AND substring(rule_id, 1, 4) = 'PPS-'") == 3
+    assert scalar("SELECT count(*) FROM audit_core.rule_catalog WHERE is_active AND substring(rule_id, 1, 4) = 'PBC-'") == 3
 
 
 def test_finding_baseline_and_severity_distribution():
-    assert scalar("SELECT count(*) FROM audit_core.fact_risk_finding WHERE substring(rule_id, 1, 4) <> 'PPS-'") == 40
+    assert scalar("SELECT count(*) FROM audit_core.fact_risk_finding WHERE rule_id NOT LIKE 'PPS-%%' AND rule_id NOT LIKE 'PBC-%%'") == 40
     with db() as conn, conn.cursor() as cur:
-        cur.execute("SELECT severity, count(*) FROM audit_core.fact_risk_finding WHERE substring(rule_id, 1, 4) <> 'PPS-' GROUP BY 1 ORDER BY 1")
+        cur.execute("SELECT severity, count(*) FROM audit_core.fact_risk_finding WHERE rule_id NOT LIKE 'PPS-%%' AND rule_id NOT LIKE 'PBC-%%' GROUP BY 1 ORDER BY 1")
         assert dict(cur.fetchall()) == {"CRITICAL": 5, "HIGH": 11, "LOW": 2, "MEDIUM": 22}
 
 

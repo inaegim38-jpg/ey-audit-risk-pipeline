@@ -11,7 +11,7 @@
 | DART XBRL·공시·주석 | 공시 이벤트와 XBRL/주석 원문을 원문 해시와 함께 수집·staging | WF-1 공시목록 API 연결; XBRL/주석 adapter 추가 대상 |
 | ECOS 환율·금리 | 관측일·지표코드·값·출처시각을 `fact_macro_ecos`에 적재 | 테이블·합성 seed 존재; 실제 API adapter 추가 대상 |
 | 공정위·조달 제재·처분 | 사업자번호·처분일·제재유형·원문 locator를 staging/fact에 적재 | `fact_sanction_event` 공통 계약 추가; 조달 입찰공고는 `fact_procurement_event`·PPS-01~03 후보 finding까지 live 검증, 제재 dataset adapter 대기 |
-| PBC 원장 GL·AR·계약 | 파일 intake·SHA-256·행수·tie-out 상태와 conformed fact 연결 | CSV intake·정규화 fact·GL/TB tie-out 구현; 실제 client 파일 및 AR/계약 상세 대사 대상 |
+| PBC 원장 GL·AR·계약 | 파일 intake·SHA-256·행수·tie-out 상태와 conformed fact 연결 | CSV intake·정규화 fact·GL/TB tie-out·candidate/evidence/HITL 경계 구현; 실제 client 파일 및 AR/계약 상세 대사 대상 |
 | AI 추출 JSON Canvas·Solar | 모델·프롬프트·원문 hash·JSON·review 상태를 `fact_ai_qa_run`에 적재 | QA fact + Phase 3 goldset 구현; 실제 provider adapter 추가 대상 |
 
 ## 2. n8n 자동화 계층

@@ -77,6 +77,54 @@ def store_payload(source_code: str, payload: dict, status: int, request_params: 
         return cur.fetchone()[0]
 
 
+def normalize_dart(payload_id: int, payload: dict) -> int:
+    rows = payload.get("list", [])
+    with psycopg2.connect(
+        host=os.getenv("PGHOST", "127.0.0.1"), port=os.getenv("PGPORT", "5432"),
+        dbname=os.getenv("PGDATABASE", "audit_db"), user=os.getenv("PGUSER", "audit_admin"),
+        password=required_env("PGPASSWORD"),
+    ) as conn, conn.cursor() as cur:
+        for row in rows:
+            cur.execute("""
+                INSERT INTO audit_core.stg_disclosure_event
+                    (rcept_no, dart_corp_code, report_nm, flr_nm, rcept_dt,
+                     is_correction, is_major, raw, source_payload_id)
+                VALUES (%s, %s, %s, %s, TO_DATE(%s, 'YYYYMMDD'), %s, %s, %s::jsonb, %s)
+                ON CONFLICT (rcept_no) DO UPDATE SET
+                    report_nm = EXCLUDED.report_nm, flr_nm = EXCLUDED.flr_nm,
+                    rcept_dt = EXCLUDED.rcept_dt, is_correction = EXCLUDED.is_correction,
+                    is_major = EXCLUDED.is_major, raw = EXCLUDED.raw,
+                    source_payload_id = EXCLUDED.source_payload_id, loaded_at = NOW()
+            """, (row.get("rcept_no"), row.get("corp_code"), row.get("report_nm", ""),
+                  row.get("flr_nm"), row.get("rcept_dt"),
+                  "정정" in row.get("report_nm", ""),
+                  any(token in row.get("report_nm", "") for token in ("주요사항", "최대주주", "전환사채", "유상증자")),
+                  json.dumps(row, ensure_ascii=False), payload_id))
+    return len(rows)
+
+
+def normalize_ecos(payload_id: int, payload: dict) -> int:
+    rows = payload.get("StatisticSearch", {}).get("row", [])
+    with psycopg2.connect(
+        host=os.getenv("PGHOST", "127.0.0.1"), port=os.getenv("PGPORT", "5432"),
+        dbname=os.getenv("PGDATABASE", "audit_db"), user=os.getenv("PGUSER", "audit_admin"),
+        password=required_env("PGPASSWORD"),
+    ) as conn, conn.cursor() as cur:
+        for row in rows:
+            time_value = row.get("TIME", "")
+            if len(time_value) != 8 or not row.get("DATA_VALUE"):
+                continue
+            indicator = "FX_USD" if row.get("ITEM_CODE1") == "0000001" else row.get("ITEM_CODE1", "ECOS")
+            cur.execute("""
+                INSERT INTO audit_core.fact_macro_ecos
+                    (obs_date, indicator_code, obs_value, source_payload_id)
+                VALUES (TO_DATE(%s, 'YYYYMMDD'), %s, %s, %s)
+                ON CONFLICT (obs_date, indicator_code) DO UPDATE SET
+                    obs_value = EXCLUDED.obs_value, source_payload_id = EXCLUDED.source_payload_id
+            """, (time_value, indicator, row["DATA_VALUE"], payload_id))
+    return len(rows)
+
+
 def fetch_dart(corp_code: str, start: str, end: str, engagement_id: str | None) -> int:
     key = required_env("DART_API_KEY")
     params = {"crtfc_key": key, "corp_code": corp_code, "bgn_de": start,
@@ -90,28 +138,46 @@ def fetch_dart(corp_code: str, start: str, end: str, engagement_id: str | None) 
                                engagement_id, date.fromisoformat(f"{start[:4]}-{start[4:6]}-{start[6:]}"),
                                date.fromisoformat(f"{end[:4]}-{end[4:6]}-{end[6:]}"),
                                "event", "KRW")
-    print(f"DART payload stored: payload_id={payload_id}, rows={len(payload.get('list', []))}")
+    normalized = normalize_dart(payload_id, payload)
+    print(f"DART payload stored: payload_id={payload_id}, raw_rows={len(payload.get('list', []))}, normalized={normalized}")
     return payload_id
 
 
 def fetch_ecos(stat_code: str, cycle: str, start: str, end: str, item: str,
                engagement_id: str | None) -> int:
     key = required_env("ECOS_API_KEY")
+    cycle_formats = {"D": "%Y%m%d", "M": "%Y%m", "Q": "%YQ%q", "Y": "%Y"}
+    if cycle not in cycle_formats:
+        raise RuntimeError("ECOS cycle must be one of D, M, Q, Y")
+    normalized_start = start.replace("/", "-")
+    normalized_end = end.replace("/", "-")
+    period_start = normalized_start
+    period_end = normalized_end
+    if cycle == "Q":
+        raise RuntimeError("ECOS quarterly cycle requires explicit YYYYQn start/end values")
+    try:
+        from datetime import datetime
+        start = datetime.strptime(normalized_start, "%Y-%m-%d").strftime(cycle_formats[cycle])
+        end = datetime.strptime(normalized_end, "%Y-%m-%d").strftime(cycle_formats[cycle])
+    except ValueError as exc:
+        raise RuntimeError(f"ECOS {cycle} cycle requires dates in YYYY-MM-DD form") from exc
     url = ECOS_TEMPLATE.format(key=quote(key, safe=""), stat_code=quote(stat_code, safe=""),
                                cycle=quote(cycle, safe=""), start=quote(start, safe=""),
                                end=quote(end, safe=""), item=quote(item, safe=""))
     status, payload = fetch_json(url)
     result = payload.get("StatisticSearch", {})
-    if result.get("RESULT", {}).get("CODE") not in (None, "INFO-000"):
-        raise RuntimeError(f"ECOS rejected request with code {result.get('RESULT', {}).get('CODE')}")
+    error_result = payload.get("RESULT", {}) or result.get("RESULT", {})
+    if error_result.get("CODE") not in (None, "INFO-000"):
+        raise RuntimeError(f"ECOS rejected request with code {error_result.get('CODE')}")
     payload_id = store_payload("ECOS_STAT", payload, status,
                                {"stat_code": stat_code, "cycle": cycle, "start": start,
                                 "end": end, "item": item}, engagement_id,
-                               date.fromisoformat(start.replace("/", "-")),
-                               date.fromisoformat(end.replace("/", "-")),
+                               date.fromisoformat(period_start),
+                               date.fromisoformat(period_end),
                                stat_code, "KRW")
     rows = result.get("row", [])
-    print(f"ECOS payload stored: payload_id={payload_id}, rows={len(rows)}")
+    normalized = normalize_ecos(payload_id, payload)
+    print(f"ECOS payload stored: payload_id={payload_id}, raw_rows={len(rows)}, normalized={normalized}")
     return payload_id
 
 

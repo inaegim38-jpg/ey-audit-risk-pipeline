@@ -153,6 +153,25 @@ priority = Σ(태그 가중치) + 문서유형 가중치 + 근접중복 1.0 + �
 
 현재 결과는 **룰 14종 / 파인딩 40건(CRITICAL 5 · HIGH 11 · MEDIUM 22 · LOW 2) / 대상 항목 2,225건**입니다. WF-3은 n8n 2.35.7에서 `n8n execute`로 단독 실행해 `status = success`까지 확인했습니다.
 
+## 통합 콘솔 — Phase 1
+
+`console/`은 `audit_core` 결과를 사람이 검토하는 경량 FastAPI 콘솔입니다. 워크리스트에서 파인딩을 필터링하고, 상세 화면의 3-Pane에서 연결 증거의 SHA-256·AI QA 출력·룰 임계값을 함께 확인한 뒤 disposition을 변경할 수 있습니다. 상태 변경은 `fact_risk_finding`과 `change_log`에 한 트랜잭션으로 기록됩니다.
+
+```bash
+python3 -m pip install -r requirements-console.txt
+PGPASSWORD=audit_password123 uvicorn console.app:app --host 127.0.0.1 --port 8010
+```
+
+| 화면/API | 역할 |
+|---|---|
+| `/findings` · `/api/findings` | 40건 워크리스트, severity/domain/disposition 필터 |
+| `/findings/{finding_id}` · `/api/findings/{id}` | Source & Evidence / AI QA / Rule Decision 3-Pane |
+| `/coverage` · `/api/coverage` | 증거 커버리지 27/40, 미연결 13건 요청 큐 |
+| `/disclosures` · `/api/disclosures` | WF-1 공시 감시 이벤트 |
+| `PATCH /api/findings/{id}/disposition` | 사람 검토 상태 전이 + change_log |
+
+화면은 AI가 결론을 확정하는 방식이 아니라, **AI·룰은 후보와 근거를 제시하고 사람이 최종 disposition을 남기는 방식**으로 설계했습니다.
+
 ## 구조
 
 ```text
@@ -169,6 +188,9 @@ docs/
   AUDIT_ENGINE.md         기존 거래 검증 엔진(11개 룰, 8277건)
   VERIFICATION.md         실행·대조 검증 기록
   AUDIT_CORE.md           audit_core 3계층·룰 14종·증거 커버리지·한계
+console/                 FastAPI 3-Pane 검토 콘솔 (워크리스트·증거·공시)
+scripts/bootstrap.sh     PostgreSQL sql/01~15 재현 실행기
+tests/test_audit_core.py audit_core 기준선 계약 테스트
 sql/
   01~07                   거래 검증 엔진 (PostgreSQL)
   08_forensic_case_schema.sql  포렌식 계층 스키마

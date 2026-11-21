@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="topbar"><div class="brand"><span class="brand-mark">AG</span><div><strong>{{ app_name }}</strong><small>Audit Control Room</small></div></div><div class="engagement"><span>ENGAGEMENT</span><b>{{ engagement }}</b><i>● LIVE DATA</i></div></header>
+  <div class="shell">
+    <aside class="sidebar"><div class="eyebrow">REVIEW CONSOLE</div><nav>
+      <a href="/findings" class="{% if request.url.path.startswith('/findings') %}active{% endif %}"><span>01</span> 파인딩 워크리스트</a>
+      <a href="/coverage" class="{% if request.url.path.startswith('/coverage') %}active{% endif %}"><span>02</span> 증거 커버리지</a>
+      <a href="/disclosures" class="{% if request.url.path.startswith('/disclosures') %}active{% endif %}"><span>03</span> 공시 감시</a>
+    </nav><div class="sidebar-note"><b>사람이 최종 판단합니다.</b><br>AI와 룰은 후보와 근거를 제시하고, disposition은 검토자가 결정합니다.</div></aside>
+    <main class="main">{% block content %}{% endblock %}</main>
+  </div>
+</body>
+</html>

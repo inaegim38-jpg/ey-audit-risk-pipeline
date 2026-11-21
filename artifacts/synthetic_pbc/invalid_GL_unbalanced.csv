@@ -1,0 +1,3 @@
+doc_no,posting_date,account_code,debit,credit
+SYN-BAD-001,2026-12-31,1100,1000000,0
+SYN-BAD-002,2026-12-31,4000,0,900000

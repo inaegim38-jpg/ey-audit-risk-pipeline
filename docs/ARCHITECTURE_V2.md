@@ -11,7 +11,7 @@
 | DART XBRL·공시·주석 | 공시 이벤트와 XBRL/주석 원문을 원문 해시와 함께 수집·staging | WF-1 공시목록 API 연결; XBRL/주석 adapter 추가 대상 |
 | ECOS 환율·금리 | 관측일·지표코드·값·출처시각을 `fact_macro_ecos`에 적재 | 테이블·합성 seed 존재; 실제 API adapter 추가 대상 |
 | 공정위·조달 제재·처분 | 사업자번호·처분일·제재유형·원문 locator를 staging/fact에 적재 | `fact_sanction_event` 공통 계약 추가; 조달 입찰공고는 `fact_procurement_event`·PPS-01~03 후보 finding까지 live 검증, 제재 dataset adapter 대기 |
-| PBC 원장 GL·AR·계약 | 파일 intake·SHA-256·행수·tie-out 상태와 conformed fact 연결 | GL/TB·AR/계약 증거 구조 존재; 실제 intake adapter 확장 대상 |
+| PBC 원장 GL·AR·계약 | 파일 intake·SHA-256·행수·tie-out 상태와 conformed fact 연결 | CSV intake adapter·ingestion log 계약 구현; 실제 client 파일 intake 및 conformed fact/tie-out 대상 |
 | AI 추출 JSON Canvas·Solar | 모델·프롬프트·원문 hash·JSON·review 상태를 `fact_ai_qa_run`에 적재 | QA fact + Phase 3 goldset 구현; 실제 provider adapter 추가 대상 |
 
 ## 2. n8n 자동화 계층
@@ -19,7 +19,7 @@
 | Workflow | 반드시 수행할 일 | 현재 상태 |
 |---|---|---|
 | WF-1 수집·조기경보 | DART/원천 수집 → staging upsert → 정정·주요사항 flag → 알림 | DART workflow 구현. `DART_API_KEY`·watch target runtime 주입, fail-closed |
-| WF-2 PBC Tie-out | GL/AR/계약 intake → 해시·행수 검증 → COA/차대조 → 예외 생성 | 기존 SQL/증거 계층의 기능을 workflow로 묶는 구현 대상 |
+| WF-2 PBC Tie-out | GL/AR/계약 intake → 해시·행수 검증 → COA/차대조 → 예외 생성 | CSV preflight·해시·행수·GL/TB 차대조 metadata 구현; 실제 client 파일 및 COA/AR/계약 tie-out 대상 |
 | WF-3 JET·FX-AR·ECL | Benford·SoD·주말/심야·다변량 → FX/ECL 시나리오 → summary | 룰 엔진 + ECL SQL 구현; WF-3에 ECL/요약 단계 확장 대상 |
 | WF-4 AI QA·조서 | Canvas/Solar JSON → goldset QA → 예외 큐 → 3-Pane/조서 export | Phase 3 goldset 구현; 실제 model adapter·export 단계 구현 대상 |
 

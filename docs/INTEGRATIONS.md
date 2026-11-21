@@ -57,6 +57,23 @@ python3 scripts/source_adapters.py procurement-bid \
 - 로컬 샌드박스: credential은 세션 runtime으로만 주입했으며 파일·로그·저장소에는 저장하지 않음
 - 합성 seed: 룰·ECL·AI QA 계약 테스트용으로만 사용
 
+## PBC CSV intake 계약
+
+PBC 원본 파일은 저장소에 복사하지 않고, 보안 파일 경로에서 `scripts/pbc_intake.py`로 fail-closed 검증한다. 지원 파일 유형은 `GL`, `TB`, `AR`, `CONTRACT`이며, 실행 전에 engagement와 파일 경로를 명시해야 한다.
+
+```bash
+python3 scripts/pbc_intake.py \
+  --file /secure/PBC/GL_202603.csv \
+  --file-type GL \
+  --engagement-id ENG-2026-001 \
+  --expected-sha256 <64-char-sha256> \
+  --ingested-by reviewer@example.com
+```
+
+이 단계는 파일 전체 SHA-256, 정규화된 header SHA-256, 행수, 절대 경로, 파일 유형을 `audit_core.stg_ingestion_log`에 기록한다. `GL`·`TB`는 debit-credit 차이를 계산하고 절대값이 1 이하이면 `PASSED`, 초과하면 `FAILED`로 기록한다. `AR`·`CONTRACT`는 구조와 행수 검증 후 실제 업무 tie-out 전까지 `PENDING`으로 남긴다. 파일 누락, 비CSV, 빈 파일, UTF-8 오류, 필수 컬럼 누락, 숫자 오류, expected hash 불일치는 성공으로 기록하지 않고 종료 코드 2로 실패한다.
+
+필수 컬럼은 `GL`: `doc_no, posting_date, account_code, debit, credit`, `TB`: `account_code, debit, credit`, `AR`: `invoice_no, customer_id, amount, currency`, `CONTRACT`: `contract_id, vendor_id, contract_amount`이다. 동일 engagement와 동일 파일 hash를 재실행하면 ingestion log를 upsert해 중복 배치를 만들지 않는다. 실제 파일이 제공되기 전에는 live PBC 행수나 tie-out 결과를 주장하지 않는다.
+
 ## 공정위·조달 공공데이터 계약
 
 공정위·조달 제재/처분의 공통 정규화 대상은 `fact_sanction_event`이며, 원천 응답은 먼저 `stg_source_payload`에 저장한다. 필수 lineage는 `source_payload_id`, `source_code`, `source_record_id`, 사업자번호/법인번호, 처분일, 제재유형, 사건번호, 원문 locator다. 공공데이터포털 인증키가 없을 때는 호출하지 않고 실패한다.

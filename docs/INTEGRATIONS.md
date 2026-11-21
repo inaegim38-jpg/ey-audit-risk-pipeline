@@ -37,6 +37,10 @@ python3 scripts/source_adapters.py dart \
 python3 scripts/source_adapters.py ecos \
   --stat-code 731Y001 --cycle D --start 2026-01-01 --end 2026-03-31 \
   --item 0000001 --engagement-id ENG-2026-001
+
+python3 scripts/source_adapters.py procurement-bid \
+  --start 202611140000 --end 202611142359 \
+  --engagement-id ENG-2026-001
 ```
 
 위 명령은 `DART_API_KEY` 또는 `ECOS_API_KEY`가 없으면 HTTP 요청 전에 실패한다. 성공 시에도 key는 fingerprint, 로그, raw payload에 포함하지 않는다. DART list endpoint의 `crtfc_key`, `corp_code`, 기간·페이지 파라미터는 [OpenDART 공식 개발가이드](https://opendart.fss.or.kr/guide/detail.do?apiGrpCd=DS001&apiId=2019001) 기준이며, ECOS는 [한국은행 ECOS Open API](https://ecos.bok.or.kr/api/)의 `StatisticSearch/{key}/json/kr/...` 경로 계약을 사용한다.
@@ -47,6 +51,7 @@ python3 scripts/source_adapters.py ecos \
 - WF-1: credential/target preflight와 fail-closed 동작 구현 완료
 - DART·ECOS: raw payload adapter와 source registry 구현 완료; 실제 key 주입 후 end-to-end 호출 대상
 - live verification: DART 100건·ECOS 일별 환율 59건을 raw payload로 저장하고 각각 staging/fact에 100% lineage 연결
+- live verification: 조달청 나라장터 입찰공고 API에서 2026-11-14 하루 범위 58건을 수신하고 `fact_procurement_event`에 58건 정규화·lineage 연결
 - 로컬 샌드박스: credential은 세션 runtime으로만 주입했으며 파일·로그·저장소에는 저장하지 않음
 - 합성 seed: 룰·ECL·AI QA 계약 테스트용으로만 사용
 

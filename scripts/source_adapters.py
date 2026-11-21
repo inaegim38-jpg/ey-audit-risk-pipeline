@@ -12,7 +12,7 @@ import hashlib
 import json
 import os
 import sys
-from datetime import date
+from datetime import date, datetime
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
@@ -21,6 +21,7 @@ import psycopg2
 
 DART_URL = "https://opendart.fss.or.kr/api/list.json"
 ECOS_TEMPLATE = "https://ecos.bok.or.kr/api/StatisticSearch/{key}/json/kr/1/100/{stat_code}/{cycle}/{start}/{end}/{item}"
+PPS_BID_URL = "https://apis.data.go.kr/1230000/ao/PubDataOpnStdService/getDataSetOpnStdBidPblancInfo"
 
 
 def required_env(name: str) -> str:
@@ -125,6 +126,74 @@ def normalize_ecos(payload_id: int, payload: dict) -> int:
     return len(rows)
 
 
+def _optional_timestamp(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    if len(value) == 16 and value[10] == " ":
+        value = value + ":00"
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _optional_amount(value: str | None) -> str | None:
+    if not value:
+        return None
+    return value.replace(",", "").strip() or None
+
+
+def normalize_procurement(payload_id: int, payload: dict) -> int:
+    response = payload.get("response", payload)
+    body = response.get("body", {}) if isinstance(response, dict) else {}
+    raw_items = body.get("items", []) if isinstance(body, dict) else []
+    rows = raw_items.get("item", []) if isinstance(raw_items, dict) else raw_items
+    if isinstance(rows, dict):
+        rows = [rows]
+    with psycopg2.connect(
+        host=os.getenv("PGHOST", "127.0.0.1"), port=os.getenv("PGPORT", "5432"),
+        dbname=os.getenv("PGDATABASE", "audit_db"), user=os.getenv("PGUSER", "audit_admin"),
+        password=required_env("PGPASSWORD"),
+    ) as conn, conn.cursor() as cur:
+        for row in rows:
+            bid_no = row.get("bidNtceNo")
+            if not bid_no:
+                continue
+            cur.execute("""
+                INSERT INTO audit_core.fact_procurement_event
+                    (source_payload_id, source_code, bid_notice_no, bid_notice_ord,
+                     notice_name, business_division, notice_status, notice_date,
+                     bid_begin_at, bid_close_at, opening_at, demand_agency_code,
+                     demand_agency_name, notice_agency_code, notice_agency_name,
+                     estimated_amount, presumption_price, contract_method,
+                     source_locator, raw_record)
+                VALUES (%s, 'PPS_BID_CONTRACT', %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                ON CONFLICT (source_code, bid_notice_no, bid_notice_ord) DO UPDATE SET
+                    source_payload_id = EXCLUDED.source_payload_id,
+                    notice_name = EXCLUDED.notice_name, notice_status = EXCLUDED.notice_status,
+                    notice_date = EXCLUDED.notice_date, bid_begin_at = EXCLUDED.bid_begin_at,
+                    bid_close_at = EXCLUDED.bid_close_at, opening_at = EXCLUDED.opening_at,
+                    demand_agency_name = EXCLUDED.demand_agency_name,
+                    notice_agency_name = EXCLUDED.notice_agency_name,
+                    estimated_amount = EXCLUDED.estimated_amount,
+                    presumption_price = EXCLUDED.presumption_price,
+                    raw_record = EXCLUDED.raw_record, loaded_at = NOW()
+            """, (payload_id, bid_no, row.get("bidNtceOrd"), row.get("bidNtceNm"),
+                  row.get("bsnsDivNm"), row.get("bidNtceSttusNm"),
+                  _optional_timestamp(row.get("bidNtceDate") and f"{row.get('bidNtceDate')} {row.get('bidNtceBgn', '00:00:00')}"),
+                  _optional_timestamp(row.get("bidBeginDate") and f"{row.get('bidBeginDate')} {row.get('bidBeginTm', '00:00:00')}"),
+                  _optional_timestamp(row.get("bidClseDate") and f"{row.get('bidClseDate')} {row.get('bidClseTm', '00:00:00')}"),
+                  _optional_timestamp(row.get("opengDate") and f"{row.get('opengDate')} {row.get('opengTm', '00:00:00')}"),
+                  row.get("dmndInsttCd"), row.get("dmndInsttNm"), row.get("ntceInsttCd"),
+                  row.get("ntceInsttNm"), _optional_amount(row.get("asignBdgtAmt")),
+                  _optional_amount(row.get("presmptPrce")), row.get("cntrctCnclsMthdNm"),
+                  row.get("bidNtceUrl"), json.dumps(row, ensure_ascii=False)))
+    return len(rows)
+
+
 def fetch_dart(corp_code: str, start: str, end: str, engagement_id: str | None) -> int:
     key = required_env("DART_API_KEY")
     params = {"crtfc_key": key, "corp_code": corp_code, "bgn_de": start,
@@ -181,6 +250,29 @@ def fetch_ecos(stat_code: str, cycle: str, start: str, end: str, item: str,
     return payload_id
 
 
+def fetch_procurement_bid(start: str, end: str, engagement_id: str | None) -> int:
+    key = required_env("DATA_GO_KR_API_KEY")
+    if not (len(start) == 12 and len(end) == 12 and start.isdigit() and end.isdigit()):
+        raise RuntimeError("procurement bid dates require YYYYMMDDHHMM")
+    if start > end:
+        raise RuntimeError("procurement bid start must not be after end")
+    params = {"serviceKey": key, "pageNo": "1", "numOfRows": "100", "type": "json",
+              "bidNtceBgnDt": start, "bidNtceEndDt": end}
+    fingerprint_params = {k: v for k, v in params.items() if k != "serviceKey"}
+    status, payload = fetch_json(f"{PPS_BID_URL}?{urlencode(params)}")
+    response = payload.get("response", payload)
+    header = response.get("header", {}) if isinstance(response, dict) else {}
+    if header.get("resultCode") not in (None, "00"):
+        raise RuntimeError(f"procurement API rejected request with code {header.get('resultCode')}")
+    payload_id = store_payload("PPS_BID_CONTRACT", payload, status, fingerprint_params,
+                               engagement_id, date.fromisoformat(f"{start[:4]}-{start[4:6]}-{start[6:8]}"),
+                               date.fromisoformat(f"{end[:4]}-{end[4:6]}-{end[6:8]}"),
+                               "bid", "KRW")
+    normalized = normalize_procurement(payload_id, payload)
+    print(f"Procurement payload stored: payload_id={payload_id}, normalized={normalized}")
+    return payload_id
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="source", required=True)
@@ -196,12 +288,18 @@ def main() -> int:
     ecos.add_argument("--end", required=True, help="YYYY-MM-DD or YYYY/MM/DD")
     ecos.add_argument("--item", required=True)
     ecos.add_argument("--engagement-id")
+    pps = sub.add_parser("procurement-bid")
+    pps.add_argument("--start", required=True, help="YYYYMMDDHHMM")
+    pps.add_argument("--end", required=True, help="YYYYMMDDHHMM")
+    pps.add_argument("--engagement-id")
     args = parser.parse_args()
     try:
         if args.source == "dart":
             fetch_dart(args.corp_code, args.start, args.end, args.engagement_id)
-        else:
+        elif args.source == "ecos":
             fetch_ecos(args.stat_code, args.cycle, args.start, args.end, args.item, args.engagement_id)
+        else:
+            fetch_procurement_bid(args.start, args.end, args.engagement_id)
         return 0
     except RuntimeError as exc:
         print(f"source adapter: FAIL ({exc})", file=sys.stderr)

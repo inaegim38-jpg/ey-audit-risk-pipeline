@@ -80,3 +80,5 @@
 공정위·조달 영역은 `sql/19_sanction_registry.sql`로 source-neutral `fact_sanction_event`와 원천 payload FK·사업자번호·처분일·제재유형·사건번호·원문 locator 계약을 추가했습니다. 공공데이터포털 API key가 아직 없으므로 외부 호출과 합성 성공 처리는 하지 않았고, 정확한 dataset별 endpoint·요청변수·응답 필드 확정 및 live adapter는 key 수령 후 진행합니다.
 
 실제 credential을 세션에 비노출 주입해 DART·ECOS를 end-to-end 검증했습니다. OpenDART는 공개 법인코드로 공시 100건을 수신해 `stg_source_payload`와 `stg_disclosure_event`에 100건 연결했고, ECOS는 일별 원/미국달러 환율 59건을 수신해 `stg_source_payload`와 `fact_macro_ecos`에 59건 연결했습니다. 키 값은 파일·로그·Git에 저장하지 않았습니다.
+
+조달청은 두 credential fragment를 결합한 runtime 값으로 공식 `PubDataOpnStdService/getDataSetOpnStdBidPblancInfo`를 호출했습니다. 공식 문서의 `YYYYMMDDHHMM` 기간 형식으로 2026-11-14 하루 범위를 조회해 58건을 수신했고, `stg_source_payload` payload_id=6과 `fact_procurement_event` 58건에 연결했습니다. API key는 파일·로그·Git에 저장하지 않았습니다.

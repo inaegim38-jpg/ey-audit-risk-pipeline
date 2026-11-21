@@ -1,0 +1,231 @@
+{
+  "id": "aegis-wf2-pbc-tieout",
+  "name": "[Aegis] WF-2 PBC intake → GL/AR/계약 Tie-out",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Seoul",
+    "saveManualExecutions": true
+  },
+  "tags": [
+    {
+      "name": "audit_core"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "wf2-1",
+      "name": "Schedule: PBC 06:30",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 6,
+              "triggerAtMinute": 30
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "wf2-2",
+      "name": "Code: PBC intake preflight",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const raw = $env.AEGIS_PBC_INPUTS_JSON;\nif (!raw) throw new Error('AEGIS_PBC_INPUTS_JSON is required; refusing untracked PBC input');\nlet inputs;\ntry { inputs = JSON.parse(raw); } catch (e) { throw new Error('AEGIS_PBC_INPUTS_JSON must be valid JSON'); }\nif (!Array.isArray(inputs) || inputs.length === 0 || inputs.some(x => !x.file_name || !x.sha256_hash || x.row_count === undefined)) {\n  throw new Error('each PBC input needs file_name, sha256_hash, and row_count');\n}\nreturn inputs.map(x => ({ json: x }));"
+      }
+    },
+    {
+      "id": "wf2-3",
+      "name": "Postgres: PBC 적재 이력",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO audit_core.stg_ingestion_log\n  (engagement_id, file_name, sha256_hash, row_count, debit_credit_diff, tieout_status, ingested_by)\nVALUES ($1, $2, $3, $4, $5, CASE WHEN ABS($5) <= 1 THEN 'PASSED' ELSE 'FAILED' END, 'n8n-wf2')\nON CONFLICT (engagement_id, sha256_hash) DO UPDATE SET\n  row_count = EXCLUDED.row_count, debit_credit_diff = EXCLUDED.debit_credit_diff,\n  tieout_status = EXCLUDED.tieout_status, ingested_at = NOW();",
+        "options": {
+          "queryReplacement": "={{ [$json.engagement_id, $json.file_name, $json.sha256_hash, $json.row_count, $json.debit_credit_diff || 0] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "PG_CRED",
+          "name": "Postgres audit_db"
+        }
+      }
+    },
+    {
+      "id": "wf2-4",
+      "name": "Postgres: PBC 예외 조회",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT engagement_id, file_name, row_count, debit_credit_diff, tieout_status\nFROM audit_core.stg_ingestion_log\nWHERE engagement_id = $1 AND tieout_status <> 'PASSED'\nORDER BY ingested_at DESC;",
+        "options": {
+          "queryReplacement": "={{ $json.engagement_id || 'ENG-2026-001' }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "PG_CRED",
+          "name": "Postgres audit_db"
+        }
+      }
+    },
+    {
+      "id": "wf2-5",
+      "name": "IF: PBC 예외 존재",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "wf2-6",
+      "name": "Slack: PBC 예외 알림",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        1100,
+        -80
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#audit-alerts",
+          "mode": "name"
+        },
+        "text": "=[Aegis] PBC tie-out 예외 {{ $input.all().length }}건 — 원장·계약·시산표 대조 필요"
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "SLACK_CRED",
+          "name": "Slack"
+        }
+      }
+    },
+    {
+      "id": "wf2-7",
+      "name": "NoOp: PBC 종료",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        80
+      ],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Schedule: PBC 06:30": {
+      "main": [
+        [
+          {
+            "node": "Code: PBC intake preflight",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: PBC intake preflight": {
+      "main": [
+        [
+          {
+            "node": "Postgres: PBC 적재 이력",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres: PBC 적재 이력": {
+      "main": [
+        [
+          {
+            "node": "Postgres: PBC 예외 조회",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres: PBC 예외 조회": {
+      "main": [
+        [
+          {
+            "node": "IF: PBC 예외 존재",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: PBC 예외 존재": {
+      "main": [
+        [
+          {
+            "node": "Slack: PBC 예외 알림",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "NoOp: PBC 종료",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

@@ -129,6 +129,57 @@ wf1 = {
     },
 }
 
+# ---------------------------------------------------------------- WF-2
+wf2_nodes = [
+    node("wf2-1", "Schedule: PBC 06:30", "n8n-nodes-base.scheduleTrigger", [0, 0],
+         {"rule": {"interval": [{"field": "days", "daysInterval": 1,
+                                  "triggerAtHour": 6, "triggerAtMinute": 30}]}}, typeVersion=1.2),
+    node("wf2-2", "Code: PBC intake preflight", "n8n-nodes-base.code", [220, 0],
+         {"jsCode": "const raw = $env.AEGIS_PBC_INPUTS_JSON;\n"
+                    "if (!raw) throw new Error('AEGIS_PBC_INPUTS_JSON is required; refusing untracked PBC input');\n"
+                    "let inputs;\ntry { inputs = JSON.parse(raw); } catch (e) { throw new Error('AEGIS_PBC_INPUTS_JSON must be valid JSON'); }\n"
+                    "if (!Array.isArray(inputs) || inputs.length === 0 || inputs.some(x => !x.file_name || !x.sha256_hash || x.row_count === undefined)) {\n"
+                    "  throw new Error('each PBC input needs file_name, sha256_hash, and row_count');\n}\n"
+                    "return inputs.map(x => ({ json: x }));"}, typeVersion=2),
+    node("wf2-3", "Postgres: PBC 적재 이력", "n8n-nodes-base.postgres", [440, 0],
+         {"operation": "executeQuery",
+          "query": "INSERT INTO audit_core.stg_ingestion_log\n"
+                   "  (engagement_id, file_name, sha256_hash, row_count, debit_credit_diff, tieout_status, ingested_by)\n"
+                   "VALUES ($1, $2, $3, $4, $5, CASE WHEN ABS($5) <= 1 THEN 'PASSED' ELSE 'FAILED' END, 'n8n-wf2')\n"
+                   "ON CONFLICT (engagement_id, sha256_hash) DO UPDATE SET\n"
+                   "  row_count = EXCLUDED.row_count, debit_credit_diff = EXCLUDED.debit_credit_diff,\n"
+                   "  tieout_status = EXCLUDED.tieout_status, ingested_at = NOW();",
+          "options": {"queryReplacement": "={{ [$json.engagement_id, $json.file_name, $json.sha256_hash, $json.row_count, $json.debit_credit_diff || 0] }}"}},
+         typeVersion=2.5, credentials=PG),
+    node("wf2-4", "Postgres: PBC 예외 조회", "n8n-nodes-base.postgres", [660, 0],
+         {"operation": "executeQuery",
+          "query": "SELECT engagement_id, file_name, row_count, debit_credit_diff, tieout_status\n"
+                   "FROM audit_core.stg_ingestion_log\n"
+                   "WHERE engagement_id = $1 AND tieout_status <> 'PASSED'\n"
+                   "ORDER BY ingested_at DESC;",
+          "options": {"queryReplacement": "={{ $json.engagement_id || 'ENG-2026-001' }}"}},
+         typeVersion=2.5, credentials=PG),
+    node("wf2-5", "IF: PBC 예외 존재", "n8n-nodes-base.if", [880, 0],
+         {"conditions": {"options": {"caseSensitive": True, "leftValue": "", "typeValidation": "loose"},
+                         "conditions": [{"id": "c1", "leftValue": "={{ $input.all().length }}",
+                                         "rightValue": 0, "operator": {"type": "number", "operation": "gt"}}],
+                         "combinator": "and"}}, typeVersion=2.2),
+    node("wf2-6", "Slack: PBC 예외 알림", "n8n-nodes-base.slack", [1100, -80],
+         {"resource": "message", "operation": "post", "select": "channel",
+          "channelId": {"__rl": True, "value": "#audit-alerts", "mode": "name"},
+          "text": "=[Aegis] PBC tie-out 예외 {{ $input.all().length }}건 — 원장·계약·시산표 대조 필요"},
+         typeVersion=2.3, credentials=SLACK),
+    node("wf2-7", "NoOp: PBC 종료", "n8n-nodes-base.noOp", [1100, 80], {}, typeVersion=1),
+]
+wf2 = {
+    "id": "aegis-wf2-pbc-tieout", "name": "[Aegis] WF-2 PBC intake → GL/AR/계약 Tie-out",
+    "active": False, "settings": SETTINGS, "tags": [{"name": "audit_core"}], "nodes": wf2_nodes,
+    "connections": {**chain("Schedule: PBC 06:30", "Code: PBC intake preflight", "Postgres: PBC 적재 이력",
+                              "Postgres: PBC 예외 조회", "IF: PBC 예외 존재"),
+                     "IF: PBC 예외 존재": {"main": [[{"node": "Slack: PBC 예외 알림", "type": "main", "index": 0}],
+                                                   [{"node": "NoOp: PBC 종료", "type": "main", "index": 0}]]}},
+}
+
 # ---------------------------------------------------------------- WF-3
 wf3_nodes = [
     node("wf3-0", "Execute Workflow Trigger", "n8n-nodes-base.executeWorkflowTrigger", [-240, 0],
@@ -196,7 +247,46 @@ wf3 = {
     },
 }
 
-for name, wf in [("wf1_regwatch.json", wf1), ("wf3_rules_engine.json", wf3)]:
+# ---------------------------------------------------------------- WF-4
+wf4_nodes = [
+    node("wf4-1", "Schedule: AI QA 09:00", "n8n-nodes-base.scheduleTrigger", [0, 0],
+         {"rule": {"interval": [{"field": "days", "daysInterval": 1,
+                                  "triggerAtHour": 9, "triggerAtMinute": 0}]}}, typeVersion=1.2),
+    node("wf4-2", "Postgres: 골드셋 QA 실행", "n8n-nodes-base.postgres", [240, 0],
+         {"operation": "executeQuery", "query": "SELECT * FROM audit_core.run_ai_qa_goldset($1);",
+          "options": {"queryReplacement": "ENG-2026-001"}}, typeVersion=2.5, credentials=PG),
+    node("wf4-3", "Postgres: AI QA 요약", "n8n-nodes-base.postgres", [480, 0],
+         {"operation": "executeQuery",
+          "query": "SELECT * FROM audit_core.vw_ai_qa_goldset_summary WHERE engagement_id = $1;",
+          "options": {"queryReplacement": "ENG-2026-001"}}, typeVersion=2.5, credentials=PG),
+    node("wf4-4", "Code: 조서 export manifest", "n8n-nodes-base.code", [720, 0],
+         {"jsCode": "const summary = $json;\nreturn [{ json: {\n"
+                    "  export_type: 'AI_QA_WORKPAPER',\n  engagement_id: summary.engagement_id,\n"
+                    "  generated_at: new Date().toISOString(),\n  qa_summary: summary,\n"
+                    "  human_review_required: Number(summary.fail_count || 0) > 0 || Number(summary.review_count || 0) > 0,\n"
+                    "} }];"}, typeVersion=2),
+    node("wf4-5", "IF: QA 예외 존재", "n8n-nodes-base.if", [960, 0],
+         {"conditions": {"options": {"caseSensitive": True, "leftValue": "", "typeValidation": "loose"},
+                         "conditions": [{"id": "c1", "leftValue": "={{ $json.human_review_required }}",
+                                         "rightValue": True, "operator": {"type": "boolean", "operation": "isTrue"}}],
+                         "combinator": "and"}}, typeVersion=2.2),
+    node("wf4-6", "Slack: AI QA 검토 요청", "n8n-nodes-base.slack", [1180, -80],
+         {"resource": "message", "operation": "post", "select": "channel",
+          "channelId": {"__rl": True, "value": "#audit-alerts", "mode": "name"},
+          "text": "=[Aegis] AI QA 예외 — 3-Pane 검토 및 조서 보류 필요"}, typeVersion=2.3, credentials=SLACK),
+    node("wf4-7", "NoOp: 조서 manifest 보관", "n8n-nodes-base.noOp", [1180, 80], {}, typeVersion=1),
+]
+wf4 = {
+    "id": "aegis-wf4-aiqa-workpaper", "name": "[Aegis] WF-4 AI QA → 예외 큐 → 조서 manifest",
+    "active": False, "settings": SETTINGS, "tags": [{"name": "audit_core"}], "nodes": wf4_nodes,
+    "connections": {**chain("Schedule: AI QA 09:00", "Postgres: 골드셋 QA 실행", "Postgres: AI QA 요약",
+                              "Code: 조서 export manifest", "IF: QA 예외 존재"),
+                     "IF: QA 예외 존재": {"main": [[{"node": "Slack: AI QA 검토 요청", "type": "main", "index": 0}],
+                                                   [{"node": "NoOp: 조서 manifest 보관", "type": "main", "index": 0}]]}},
+}
+
+for name, wf in [("wf1_regwatch.json", wf1), ("wf2_pbc_tieout.json", wf2),
+                 ("wf3_rules_engine.json", wf3), ("wf4_aiqa_workpaper.json", wf4)]:
     path = HERE / name
     path.write_text(json.dumps(wf, ensure_ascii=False, indent=2), encoding="utf-8")
     print("wrote", path, len(wf["nodes"]), "nodes")

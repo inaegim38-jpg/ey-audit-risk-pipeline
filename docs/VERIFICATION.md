@@ -64,3 +64,15 @@
 | 하드코딩 점검 | `wf1_regwatch.json` 검색 | corp code를 workflow source에서 제거 |
 
 실제 OpenDART end-to-end 호출은 credential 주입 후 별도 실행해야 하며, 현재 샌드박스에는 DART key가 없어 성공으로 가장하지 않았다.
+
+## 12. Architecture v2 정합성 기준
+
+사용자가 제공한 Architecture v2를 구현 기준선으로 고정했습니다. 원천 데이터 → WF-1~WF-4 → PostgreSQL master/staging/fact/mart → 검증 엔진·예외 큐 → HITL → Power BI/RFP/Word·Excel 산출물의 추적성은 [docs/ARCHITECTURE_V2.md](ARCHITECTURE_V2.md)에 기록했습니다.
+
+| 검증 | 명령·방법 | 결과 |
+|---|---|---|
+| WF-1~WF-4 산출물 | `python3 n8n/build_audit_workflows.py` | PASS; 4 workflow JSON 생성 |
+| JSON 구조 | `python3 -m json.tool n8n/wf*.json` | PASS |
+| WF-2 PBC 경계 | PBC input preflight → ingestion log → tie-out 예외 → Slack | 구현 완료, 실제 PBC 파일 연결 대상 |
+| WF-4 AI/조서 경계 | goldset QA → summary → export manifest → HITL 예외 | 구현 완료, 실제 Canvas/Solar adapter·Word/Excel writer 대상 |
+| 원천 adapter | DART credential contract | WF-1 runtime key·target 주입 및 fail-closed; ECOS/공정위/XBRL 추가 대상 |

@@ -20,6 +20,19 @@
 
 - [x] Phase 2: FX-AR/ECL 시뮬레이터
 - [x] Phase 3: AI QA 골드셋 하네스
-- [ ] Phase 4: 조서 자동화
+
+## Architecture v2 구현 트랙
+
+- [x] 원천·자동화·DB·검증·HITL·산출물 계층을 Architecture v2 문서로 고정한다.
+- [x] WF-1 DART 수집·조기경보의 runtime credential 주입과 fail-closed를 구현한다.
+- [ ] WF-2 PBC GL/AR/계약 intake·tie-out·예외 큐를 구현한다.
+- [ ] WF-3 JET·FX-AR·ECL 통합 workflow와 scenario summary를 구현한다.
+- [ ] WF-4 Canvas/Solar AI QA·3-Pane·조서 export workflow를 구현한다.
+- [ ] DART XBRL, ECOS, 공정위/조달, PBC 원천 adapter와 source registry를 연결한다.
+- [ ] Power BI Quality/JET/ECL/AI 4페이지 mart와 Word·Excel 조서 export를 연결한다.
+
+## 다음 Phase
+
+- [ ] Phase 4: WF-2/4 조서 자동화와 승인 버전 export
 - [ ] Phase 5: 실데이터·50만건 성능 검증
-- [ ] Phase 6: 5분 데모·면접 자산 정리
+- [ ] Phase 6: Architecture v2 기준 5분 데모·RFP PoC 킷·면접 자산 정리

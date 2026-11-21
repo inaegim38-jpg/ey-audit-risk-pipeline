@@ -1,5 +1,7 @@
 # 포렌식 조사 지원 워크벤치
 
+> 구현 기준선: [Architecture v2](docs/ARCHITECTURE_V2.md). 본 프로젝트는 DART XBRL·ECOS·공정위/조달·PBC·AI 원천에서 WF-1~WF-4를 거쳐 PostgreSQL master/staging/fact/mart, 검증 엔진, HITL, Power BI·조서 산출물로 이어지는 제안서 아키텍처를 구현한다.
+
 증거를 모으고, 문서를 검토하고, 문서 사이의 관계에서 확인이 필요한 지점을 찾아 증거 인용이 붙은 보고서까지 만드는 파이프라인입니다. 감사부문 포렌식팀 인턴 직무(자료·데이터 관리, 문서 검토, 조사·분석 지원)를 실제로 돌아가는 절차로 옮겼습니다.
 
 ```
@@ -120,7 +122,7 @@ priority = Σ(태그 가중치) + 문서유형 가중치 + 근접중복 1.0 + �
 
 ## Power BI · n8n 연결
 
-포렌식 계층은 SQLite 데모로 끝나지 않습니다. 같은 산출물을 PostgreSQL에 적재해 Power BI로 보고, n8n 스케줄로 매일 다시 돌리는 경로를 함께 두었습니다.
+포렌식 계층은 SQLite 데모로 끝나지 않습니다. 같은 산출물을 PostgreSQL에 적재해 Power BI로 보고, n8n WF-1~WF-4 스케줄로 매일 다시 돌리는 경로를 함께 둡니다.
 
 | 파일 | 역할 |
 |---|---|
@@ -145,9 +147,11 @@ priority = Σ(태그 가중치) + 문서유형 가중치 + 근접중복 1.0 + �
 | `sql/13_evidence_link.sql` | `forensic` 케이스에 증거 8건 등록, 파인딩 27건 연결(커버리지 67.5%) |
 | `sql/14_verify_audit_core.sql` | PASS/FAIL 검증 10종 |
 | `sql/15_disclosure_events.sql` | 공시 이벤트 스테이징 + `vw_disclosure_watch` |
-| `n8n/wf1_regwatch.json` | WF-1 공시 감시 8노드 (Schedule 07:30) |
-| `n8n/wf3_rules_engine.json` | WF-3 룰 엔진 8노드 (Schedule 08:00 + Execute Workflow) |
-| `n8n/build_audit_workflows.py` | 두 워크플로우 JSON 생성기 (재현용) |
+| `n8n/wf1_regwatch.json` | WF-1 DART 공시 수집·조기경보 8노드 (runtime credential) |
+| `n8n/wf2_pbc_tieout.json` | WF-2 PBC intake·GL/AR tie-out·예외 큐 7노드 |
+| `n8n/wf3_rules_engine.json` | WF-3 JET·룰 요약·알림 8노드 (Schedule 08:00 + Execute Workflow) |
+| `n8n/wf4_aiqa_workpaper.json` | WF-4 AI QA·예외 큐·조서 manifest 7노드 |
+| `n8n/build_audit_workflows.py` | 네 workflow JSON 생성기 (재현용) |
 
 실행 순서는 `10 → 11 → 12 → 13 → 14 → 15`이고, 룰만 다시 돌릴 때는 `SELECT audit_core.run_rules('ENG-2026-001');` 한 줄이면 됩니다. `run_rules()`는 `(engagement_id, rule_id, ref_id)` 유니크 키에 `ON CONFLICT DO UPDATE`를 걸어 두 번 돌려도 파인딩이 늘지 않습니다.
 
@@ -231,6 +235,8 @@ n8n/                    수집·검증 워크플로우, 포렌식 케이스, 공
 powerbi/                DAX 측정값 (거래 검증 8개, 포렌식 22개)
 reports/                기존 분석 보고서
 ```
+
+Architecture v2의 WF-2 PBC tie-out, WF-4 AI QA·조서 export, 실제 DART XBRL·ECOS·공정위/조달 adapter, Power BI 4페이지와 Word·Excel 조서는 다음 구현 트랙으로 진행하며, 완료 전에는 합성 데이터 검증을 실제 원천 연결로 표현하지 않습니다.
 
 ## 데이터 출처
 

@@ -31,7 +31,8 @@ for sql in \
   sql/20_procurement_fact.sql \
   sql/21_procurement_rules.sql \
   sql/22_procurement_evidence.sql \
-  sql/23_pbc_intake.sql; do
+  sql/23_pbc_intake.sql \
+  sql/24_pbc_tieout_facts.sql; do
   echo "[bootstrap] $sql"
   psql --set ON_ERROR_STOP=1 --file="$sql"
 done

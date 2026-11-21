@@ -127,3 +127,19 @@ PBC intake 이후 단계에서 n8n이 사용자가 임의로 작성한 숫자를
 | 불균형 GL negative case | 2 | 100,000.00 | `FAILED` |
 
 추가 negative case도 확인했습니다. 필수 컬럼이 없는 AR 파일과 expected SHA-256이 틀린 파일은 종료 코드 2로 차단되고 ingestion log에 기록되지 않았습니다. 정상 GL을 동일 engagement·동일 hash로 재실행해도 배치는 1건으로 유지되어 idempotency를 확인했습니다. Synthetic ingestion 행은 검증 후 모두 삭제했으며, 실제 고객 파일의 live 결과로 해석하면 안 됩니다.
+
+## 16. PBC conformed facts and tie-out engine
+
+`sql/24_pbc_tieout_facts.sql`과 `scripts/pbc_load_and_tieout.py`를 적용해 synthetic CSV를 정규화 fact로 적재하고 tie-out 결과를 DB에 저장했습니다. 고객 PBC가 아니므로 검증 종료 후 fact·ingestion·tie-out 행은 모두 삭제했습니다.
+
+| 검증 | 결과 |
+|---|---|
+| GL fact load | 4 rows, batch UUID lineage 저장 |
+| TB fact load | 4 rows, batch UUID lineage 저장 |
+| AR fact load | 3 rows, 총액 1,000,000, `PENDING` |
+| Contract fact load | 2 rows, 총액 2,000,000, `PENDING` |
+| `PBC-TB-01` | account aggregate difference 0.00, `PASSED` |
+| `PBC-AR-01` / `PBC-CON-01` | 상세 control-account·계약 대사 전 `PENDING` |
+| tie-out 재실행 | 각 rule 결과 1행 유지, idempotent |
+
+이 단계는 아직 finding을 확정하지 않는다. 다음 단계에서 `FAILED` tie-out만 candidate finding/evidence로 승격하고, `PENDING`은 추가자료 요청 큐로 보내며 최종 판정은 HITL로 남긴다.

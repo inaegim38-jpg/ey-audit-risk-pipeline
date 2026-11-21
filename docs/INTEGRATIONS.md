@@ -76,6 +76,21 @@ python3 scripts/pbc_intake.py \
 
 WF-2 n8n은 `AEGIS_PBC_INPUTS_JSON`을 intake 실행 결과 manifest로만 소비한다. 각 항목에 `engagement_id`, `file_name`, `pbc_file_type`, `sha256_hash`, `source_path`, `header_sha256`, `row_count`, `debit_credit_diff`, `tieout_status`가 모두 있어야 하며, 허용 상태는 `PASSED`, `FAILED`, `PENDING`뿐이다. WF-2는 사용자가 임의로 입력한 행수나 차대조 결과를 성공값으로 승격하지 않고, 검증된 metadata와 lineage를 `stg_ingestion_log`에 upsert한다.
 
+수령한 CSV의 행을 conformed fact로 적재하려면 다음 단계를 사용한다.
+
+```bash
+python3 scripts/pbc_load_and_tieout.py load \
+  --file /secure/PBC/GL_202603.csv \
+  --file-type GL \
+  --engagement-id ENG-2026-001 \
+  --expected-sha256 <64-char-sha256>
+
+python3 scripts/pbc_load_and_tieout.py tieout \
+  --engagement-id ENG-2026-001
+```
+
+`sql/24_pbc_tieout_facts.sql`은 GL line, TB balance, AR item, contract fact와 `pbc_tieout_result`를 만든다. 현재 `PBC-TB-01`은 계정별 GL–TB debit/credit aggregate를 비교해 `PASSED`/`FAILED`를 기록하고, `PBC-AR-01`과 `PBC-CON-01`은 control-account 또는 상세 계약 대사 계약이 들어오기 전까지 총액·행수와 함께 `PENDING`으로 남긴다. 모든 적재와 tie-out 결과는 batch UUID와 파일 hash로 원본 intake에 연결된다.
+
 ## 공정위·조달 공공데이터 계약
 
 공정위·조달 제재/처분의 공통 정규화 대상은 `fact_sanction_event`이며, 원천 응답은 먼저 `stg_source_payload`에 저장한다. 필수 lineage는 `source_payload_id`, `source_code`, `source_record_id`, 사업자번호/법인번호, 처분일, 제재유형, 사건번호, 원문 locator다. 공공데이터포털 인증키가 없을 때는 호출하지 않고 실패한다.

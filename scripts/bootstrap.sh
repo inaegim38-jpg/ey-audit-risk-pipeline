@@ -24,7 +24,8 @@ for sql in \
   sql/13_evidence_link.sql \
   sql/14_verify_audit_core.sql \
   sql/15_disclosure_events.sql \
-  sql/16_ecl_simulator.sql; do
+  sql/16_ecl_simulator.sql \
+  sql/17_ai_qa_goldset.sql; do
   echo "[bootstrap] $sql"
   psql --set ON_ERROR_STOP=1 --file="$sql"
 done

@@ -19,7 +19,7 @@
 ## 다음 Phase
 
 - [x] Phase 2: FX-AR/ECL 시뮬레이터
-- [ ] Phase 3: AI QA 골드셋 하네스
+- [x] Phase 3: AI QA 골드셋 하네스
 - [ ] Phase 4: 조서 자동화
 - [ ] Phase 5: 실데이터·50만건 성능 검증
 - [ ] Phase 6: 5분 데모·면접 자산 정리

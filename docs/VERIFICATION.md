@@ -88,3 +88,17 @@
 조달 후보 16건에는 `EV-PPS-000006` raw API payload evidence를 연결했습니다. evidence SHA-256, payload ID, 공고번호, 공식 locator가 3-Pane 조회에서 함께 반환되는 것을 smoke-test했고, 전체 coverage는 56건 중 43건, 76.79%로 확인했습니다. 기존 40건의 legacy evidence 기준선은 67.50%로 유지됩니다.
 
 HITL 상태 전이도 검증했습니다. 조달 후보 1건을 `OPEN → IN_REVIEW → OPEN`으로 변경하면서 reviewer `procurement.reviewer`, reviewed_at, `change_log` 2건이 남는 것을 확인했습니다. 최종 상태는 다시 `OPEN`이며, 다음 구현 단계는 실제 PBC 파일 intake·SHA-256·행수·GL/AR/계약 tie-out입니다.
+
+## 13. PBC CSV intake 계약
+
+`sql/23_pbc_intake.sql`과 `scripts/pbc_intake.py`로 실제 파일을 받기 전의 fail-closed intake 경계를 구현했습니다. 이 검증은 client PBC 파일을 생성하거나 대체하지 않으며, 현재 실행에는 실제 PBC 파일이 제공되지 않았으므로 live PBC 행수·잔액·tie-out 결과를 기록하지 않습니다.
+
+| 검증 | 명령·방법 | 결과 |
+|---|---|---|
+| migration 적용 | `psql --set ON_ERROR_STOP=1 -f sql/23_pbc_intake.sql` | PASS; `pbc_file_type`, `source_path`, `header_sha256`, index/constraint 생성 |
+| migration 멱등성 | 동일 migration 재실행 | PASS; `IF NOT EXISTS`/change-log guard 및 constraint 재생성으로 오류 없음 |
+| fail-closed 파일 검증 | `tests/test_pbc_intake.py` | PASS; missing file, empty file, missing columns 차단 |
+| 전체 회귀 | `pytest -q` | PASS 23개 |
+| 컴파일/공백 | `python3 -m compileall -q console tests scripts n8n && git diff --check` | PASS |
+
+지원 유형은 `GL`, `TB`, `AR`, `CONTRACT`이며, 파일 전체 SHA-256·header SHA-256·행수·source path를 ingestion log에 기록한다. `GL`·`TB`는 debit-credit 차이를 계산해 `PASSED`/`FAILED`를 정하고, `AR`·`CONTRACT`는 실제 상세 tie-out 전 `PENDING`으로 남긴다. 동일 engagement와 SHA-256 재실행은 upsert 계약이다. 실제 client 파일 제공 후에만 동일 명령으로 live intake와 finding/evidence/HITL 연결을 수행한다.

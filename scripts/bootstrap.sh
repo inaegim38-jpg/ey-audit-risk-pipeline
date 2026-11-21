@@ -28,7 +28,8 @@ for sql in \
   sql/17_ai_qa_goldset.sql \
   sql/18_source_registry.sql \
   sql/19_sanction_registry.sql \
-  sql/20_procurement_fact.sql; do
+  sql/20_procurement_fact.sql \
+  sql/21_procurement_rules.sql; do
   echo "[bootstrap] $sql"
   psql --set ON_ERROR_STOP=1 --file="$sql"
 done

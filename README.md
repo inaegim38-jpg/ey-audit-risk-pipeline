@@ -194,6 +194,8 @@ PGPASSWORD=audit_password123 uvicorn console.app:app --host 127.0.0.1 --port 801
 PGPASSWORD=audit_password123 psql -f sql/17_ai_qa_goldset.sql
 ```
 
+`sql/18_source_registry.sql`과 `scripts/source_adapters.py`는 DART·ECOS 원천 응답을 정규화 전에 raw JSON·request fingerprint·payload SHA-256으로 보존하는 adapter 계층입니다. `DART_API_KEY` 또는 `ECOS_API_KEY`가 없으면 HTTP 호출 전에 실패합니다. 상세 명령은 [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)를 참고합니다.
+
 ## 외부 연동과 credential 계약
 
 실제 제안서 아키텍처의 외부 연동은 저장소에 비밀값을 넣지 않고 runtime secret으로 주입합니다. WF-1은 `DART_API_KEY`와 `AEGIS_WATCH_TARGETS_JSON`이 없으면 합성 데이터로 넘어가지 않고 실패합니다. 감시 대상 법인도 workflow 코드에 하드코딩하지 않습니다. 설정 예시는 [.env.example](.env.example), 운영 전환 절차는 [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)에 있습니다.
@@ -229,7 +231,7 @@ sql/
   01~07                   거래 검증 엔진 (PostgreSQL)
   08_forensic_case_schema.sql  포렌식 계층 스키마
   09_forensic_pbi_views.sql    포렌식 Power BI 뷰 4종
-  10~17                   audit_core 3계층·룰 14종·증거 연결·검증·공시 감시·ECL·AI QA 골드셋
+  10~18                   audit_core 3계층·룰 14종·증거 연결·검증·공시 감시·ECL·AI QA·source registry
 python/                 BankSim·서울시 데이터 적재, 검토 시트 생성
 n8n/                    수집·검증 워크플로우, 포렌식 케이스, 공시 감시(WF-1), 룰 엔진(WF-3)
 powerbi/                DAX 측정값 (거래 검증 8개, 포렌식 22개)

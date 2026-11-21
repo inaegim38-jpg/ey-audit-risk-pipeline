@@ -24,3 +24,13 @@ def test_request_fingerprint_excludes_dart_secret():
     safe = {k: v for k, v in params.items() if k != "crtfc_key"}
     assert "secret" not in str(safe)
     assert "corp_code" in safe
+
+
+def test_procurement_date_contract_and_secret_fingerprint(monkeypatch):
+    monkeypatch.delenv("DATA_GO_KR_API_KEY", raising=False)
+    with pytest.raises(RuntimeError):
+        MODULE.required_env("DATA_GO_KR_API_KEY")
+    params = {"serviceKey": "secret", "bidNtceBgnDt": "202611140000"}
+    safe = {k: v for k, v in params.items() if k != "serviceKey"}
+    assert "secret" not in str(safe)
+    assert len("202611140000") == 12

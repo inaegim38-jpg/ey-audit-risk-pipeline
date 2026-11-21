@@ -13,6 +13,7 @@ HERE = Path(__file__).parent
 
 PG = {"postgres": {"id": "PG_CRED", "name": "Postgres audit_db"}}
 SLACK = {"slackApi": {"id": "SLACK_CRED", "name": "Slack"}}
+SMTP = {"smtp": {"id": "SMTP_CRED", "name": "SMTP client notification"}}
 SETTINGS = {"executionOrder": "v1", "timezone": "Asia/Seoul", "saveManualExecutions": True}
 
 
@@ -287,8 +288,63 @@ wf4 = {
                                                    [{"node": "NoOp: 조서 manifest 보관", "type": "main", "index": 0}]]}},
 }
 
+# ---------------------------------------------------------------- WF-5
+wf5_nodes = [
+    node("wf5-1", "Schedule: PBC 추가자료 07:15", "n8n-nodes-base.scheduleTrigger", [0, 0],
+         {"rule": {"interval": [{"field": "days", "daysInterval": 1,
+                                  "triggerAtHour": 7, "triggerAtMinute": 15}]}}, typeVersion=1.2),
+    node("wf5-2", "Postgres: OPEN PBC 요청 조회", "n8n-nodes-base.postgres", [220, 0],
+         {"operation": "executeQuery",
+          "query": "SELECT q.request_id, q.engagement_id, q.rule_id, q.request_reason, q.created_at,\n"
+                   "       l.file_name, l.source_path\n"
+                   "FROM audit_core.pbc_request_queue q\n"
+                   "LEFT JOIN audit_core.pbc_tieout_result t ON t.tieout_id = q.tieout_id\n"
+                   "LEFT JOIN audit_core.stg_ingestion_log l ON l.batch_id = t.left_batch_id\n"
+                   "WHERE q.status = 'OPEN'\n"
+                   "  AND NOT EXISTS (SELECT 1 FROM audit_core.pbc_notification_log n\n"
+                   "                  WHERE n.request_id = q.request_id AND n.channel = 'EMAIL')\n"
+                   "ORDER BY q.created_at;"},
+         typeVersion=2.5, credentials=PG),
+    node("wf5-3", "Code: 수신자·메일 payload fail-closed", "n8n-nodes-base.code", [440, 0],
+         {"jsCode": "const raw = $env.AEGIS_PBC_REQUEST_RECIPIENTS_JSON;\n"
+                    "if ($env.AEGIS_PBC_EMAIL_ENABLED !== 'true' || !raw) throw new Error('AEGIS_PBC_EMAIL_ENABLED=true and AEGIS_PBC_REQUEST_RECIPIENTS_JSON are required; refusing client notification');\n"
+                    "let recipients;\ntry { recipients = JSON.parse(raw); } catch (e) { throw new Error('AEGIS_PBC_REQUEST_RECIPIENTS_JSON must be valid JSON'); }\n"
+                    "return $input.all().map(item => {\n"
+                    "  const cfg = recipients[item.json.engagement_id];\n"
+                    "  if (!cfg || !Array.isArray(cfg.to) || cfg.to.length === 0 || cfg.to.some(x => !String(x).includes('@'))) throw new Error(`No valid recipient mapping for ${item.json.engagement_id}`);\n"
+                    "  const x = item.json;\n"
+                    "  return { json: { ...x, to_email: cfg.to.join(','), cc_email: (cfg.cc || []).join(','),\n"
+                    "    subject: `[Aegis] PBC 추가자료 요청 ${x.rule_id} / ${x.engagement_id}`,\n"
+                    "    body: `감사자료 추가 요청입니다.\\n\\nEngagement: ${x.engagement_id}\\n요청 유형: ${x.rule_id}\\n요청 사유: ${x.request_reason}\\n원본 파일: ${x.file_name || '확인 필요'}\\n\\n보안 데이터룸을 통해 자료를 업로드해 주세요. 이 메일에 고객자료를 직접 회신하지 마세요.` } };\n"
+                    "});"}, typeVersion=2),
+    node("wf5-4", "Email: 클라이언트 추가자료 요청", "n8n-nodes-base.emailSend", [660, 0],
+         {"fromEmail": "={{ $env.AEGIS_PBC_FROM_EMAIL }}", "toEmail": "={{ $json.to_email }}",
+          "ccEmail": "={{ $json.cc_email }}", "subject": "={{ $json.subject }}", "emailType": "text",
+          "message": "={{ $json.body }}"}, typeVersion=2.1, credentials=SMTP),
+    node("wf5-5", "Postgres: 발송 성공 로그", "n8n-nodes-base.postgres", [880, 0],
+         {"operation": "executeQuery",
+          "query": "INSERT INTO audit_core.pbc_notification_log (request_id, channel, recipient)\n"
+                   "VALUES ($1, 'EMAIL', $2)\n"
+                   "ON CONFLICT (request_id, channel, recipient) DO NOTHING;",
+          "options": {"queryReplacement": "={{ [$json.request_id, $json.to_email] }}"}},
+         typeVersion=2.5, credentials=PG),
+    node("wf5-6", "Slack: 내부 발송 요약", "n8n-nodes-base.slack", [1100, 0],
+         {"resource": "message", "operation": "post", "select": "channel",
+          "channelId": {"__rl": True, "value": "#audit-alerts", "mode": "name"},
+          "text": "=[Aegis] PBC 추가자료 요청 메일 발송 완료 — {{ $json.rule_id }} / {{ $json.engagement_id }}"},
+         typeVersion=2.3, credentials=SLACK),
+]
+wf5 = {
+    "id": "aegis-wf5-pbc-request-notify", "name": "[Aegis] WF-5 PBC 추가자료 요청 알림",
+    "active": False, "settings": SETTINGS, "tags": [{"name": "audit_core"}], "nodes": wf5_nodes,
+    "connections": {**chain("Schedule: PBC 추가자료 07:15", "Postgres: OPEN PBC 요청 조회",
+                              "Code: 수신자·메일 payload fail-closed", "Email: 클라이언트 추가자료 요청",
+                              "Postgres: 발송 성공 로그", "Slack: 내부 발송 요약")},
+}
+
 for name, wf in [("wf1_regwatch.json", wf1), ("wf2_pbc_tieout.json", wf2),
-                 ("wf3_rules_engine.json", wf3), ("wf4_aiqa_workpaper.json", wf4)]:
+                 ("wf3_rules_engine.json", wf3), ("wf4_aiqa_workpaper.json", wf4),
+                 ("wf5_pbc_request_notify.json", wf5)]:
     path = HERE / name
     path.write_text(json.dumps(wf, ensure_ascii=False, indent=2), encoding="utf-8")
     print("wrote", path, len(wf["nodes"]), "nodes")

@@ -22,6 +22,7 @@
 | WF-2 PBC Tie-out | GL/AR/계약 intake → 해시·행수 검증 → COA/차대조 → 예외 생성 | CSV intake와 n8n manifest preflight·lineage upsert 연결; 실제 client 파일 및 COA/AR/계약 tie-out 대상 |
 | WF-3 JET·FX-AR·ECL | Benford·SoD·주말/심야·다변량 → FX/ECL 시나리오 → summary | 룰 엔진 + ECL SQL 구현; WF-3에 ECL/요약 단계 확장 대상 |
 | WF-4 AI QA·조서 | Canvas/Solar JSON → goldset QA → 예외 큐 → 3-Pane/조서 export | Phase 3 goldset 구현; 실제 model adapter·export 단계 구현 대상 |
+| WF-5 PBC 요청 알림 | PENDING 요청 조회 → 승인된 수신자 검증 → 이메일 → 발송 log → 내부 Slack 요약 | SMTP credential·recipient mapping 주입 전 fail-closed; 이메일 멱등성 log 구현 |
 
 ## 3. PostgreSQL 계층
 

@@ -190,6 +190,17 @@ PGPASSWORD=audit_password123 uvicorn console.app:app --host 127.0.0.1 --port 801
 PGPASSWORD=audit_password123 psql -f sql/17_ai_qa_goldset.sql
 ```
 
+## 외부 연동과 credential 계약
+
+실제 제안서 아키텍처의 외부 연동은 저장소에 비밀값을 넣지 않고 runtime secret으로 주입합니다. WF-1은 `DART_API_KEY`와 `AEGIS_WATCH_TARGETS_JSON`이 없으면 합성 데이터로 넘어가지 않고 실패합니다. 감시 대상 법인도 workflow 코드에 하드코딩하지 않습니다. 설정 예시는 [.env.example](.env.example), 운영 전환 절차는 [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)에 있습니다.
+
+```bash
+cp .env.example .env
+# .env에 실제 OpenDART key와 감시 대상 JSON을 주입한 뒤
+set -a; . ./.env; set +a
+python3 scripts/integration_preflight.py --integration dart
+```
+
 ## 구조
 
 ```text
@@ -206,6 +217,7 @@ docs/
   AUDIT_ENGINE.md         기존 거래 검증 엔진(11개 룰, 8277건)
   VERIFICATION.md         실행·대조 검증 기록
   AUDIT_CORE.md           audit_core 3계층·룰 14종·증거 커버리지·한계
+  INTEGRATIONS.md         DART·AI·Postgres·Slack credential 계약
 console/                 FastAPI 3-Pane 검토 콘솔 (워크리스트·증거·공시)
 scripts/bootstrap.sh     PostgreSQL sql/01~17 재현 실행기
 tests/test_audit_core.py audit_core 기준선 계약 테스트

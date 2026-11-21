@@ -51,3 +51,16 @@
 | 기준선 보존 | `fact_risk_finding` count | 40건 유지 |
 
 현재 골드셋은 합성 seed의 truth에서 파생된 개발용 계약 테스트이며, 실제 고객 적용 전에는 독립 human-reviewed goldset과 reviewer sign-off로 교체해야 합니다.
+
+## 11. 외부 연동 credential 계약
+
+수정 제안서의 운영 아키텍처에 맞춰 외부 연동을 fail-closed 방식으로 정리했습니다.
+
+| 검증 | 명령·방법 | 결과 |
+|---|---|---|
+| 대상·키 preflight | `python3 scripts/integration_preflight.py --integration dart` | 실제 key 미주입 환경에서는 의도적으로 FAIL; 합성 fallback 없음 |
+| 대상 JSON 검증 | `pytest -q tests/test_integration_preflight.py` | PASS; 빈 배열·필드 누락·malformed JSON 차단 |
+| workflow 재생성 | `python3 n8n/build_audit_workflows.py` | PASS; `DART_API_KEY`와 `AEGIS_WATCH_TARGETS_JSON` runtime 주입 |
+| 하드코딩 점검 | `wf1_regwatch.json` 검색 | corp code를 workflow source에서 제거 |
+
+실제 OpenDART end-to-end 호출은 credential 주입 후 별도 실행해야 하며, 현재 샌드박스에는 DART key가 없어 성공으로 가장하지 않았다.

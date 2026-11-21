@@ -48,7 +48,7 @@ def test_ecl_recalc_has_same_grain_per_scenario():
 
 def test_ecl_summary_has_five_scenarios_and_baseline_is_preserved():
     assert scalar("SELECT count(*) FROM audit_core.vw_ecl_scenario_summary WHERE engagement_id=%s", (ENGAGEMENT,)) == 5
-    assert scalar("SELECT count(*) FROM audit_core.fact_risk_finding") == 40
+    assert scalar("SELECT count(*) FROM audit_core.fact_risk_finding WHERE substring(rule_id, 1, 4) <> 'PPS-'") == 40
 
 
 def test_fx_shock_direction_changes_only_non_krw_exposure():

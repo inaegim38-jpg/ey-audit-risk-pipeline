@@ -82,3 +82,5 @@
 실제 credential을 세션에 비노출 주입해 DART·ECOS를 end-to-end 검증했습니다. OpenDART는 공개 법인코드로 공시 100건을 수신해 `stg_source_payload`와 `stg_disclosure_event`에 100건 연결했고, ECOS는 일별 원/미국달러 환율 59건을 수신해 `stg_source_payload`와 `fact_macro_ecos`에 59건 연결했습니다. 키 값은 파일·로그·Git에 저장하지 않았습니다.
 
 조달청은 두 credential fragment를 결합한 runtime 값으로 공식 `PubDataOpnStdService/getDataSetOpnStdBidPblancInfo`를 호출했습니다. 공식 문서의 `YYYYMMDDHHMM` 기간 형식으로 2026-11-14 하루 범위를 조회해 58건을 수신했고, `stg_source_payload` payload_id=6과 `fact_procurement_event` 58건에 연결했습니다. API key는 파일·로그·Git에 저장하지 않았습니다.
+
+조달 후보 룰 `PPS-01~PPS-03`도 실행했습니다. 각각 7건·4건·5건의 후보를 생성해 기존 40건과 분리된 총 56건의 finding을 만들었고, 16건 모두 `OPEN`으로 남겼습니다. 동일 함수를 재실행하면 신규 0건·갱신 16건으로 멱등성을 확인했습니다. 확정·오탐 판정은 아직 수행하지 않았습니다.

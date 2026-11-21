@@ -64,4 +64,4 @@ def test_goldset_detects_mutated_ai_output_without_persisting_mutation():
 
 
 def test_goldset_does_not_change_finding_baseline():
-    assert scalar("SELECT count(*) FROM audit_core.fact_risk_finding") == 40
+    assert scalar("SELECT count(*) FROM audit_core.fact_risk_finding WHERE substring(rule_id, 1, 4) <> 'PPS-'") == 40

@@ -19,19 +19,27 @@ def scalar(sql, params=()):
         return cur.fetchone()[0]
 
 
-def test_rule_catalog_has_14_active_rules():
-    assert scalar("SELECT count(*) FROM audit_core.rule_catalog WHERE is_active") == 14
+def test_rule_catalog_preserves_14_legacy_and_adds_3_procurement_rules():
+    assert scalar("SELECT count(*) FROM audit_core.rule_catalog WHERE is_active") == 17
+    assert scalar("SELECT count(*) FROM audit_core.rule_catalog WHERE is_active AND substring(rule_id, 1, 4) = 'PPS-'") == 3
 
 
 def test_finding_baseline_and_severity_distribution():
-    assert scalar("SELECT count(*) FROM audit_core.fact_risk_finding") == 40
+    assert scalar("SELECT count(*) FROM audit_core.fact_risk_finding WHERE substring(rule_id, 1, 4) <> 'PPS-'") == 40
     with db() as conn, conn.cursor() as cur:
-        cur.execute("SELECT severity, count(*) FROM audit_core.fact_risk_finding GROUP BY 1 ORDER BY 1")
+        cur.execute("SELECT severity, count(*) FROM audit_core.fact_risk_finding WHERE substring(rule_id, 1, 4) <> 'PPS-' GROUP BY 1 ORDER BY 1")
         assert dict(cur.fetchall()) == {"CRITICAL": 5, "HIGH": 11, "LOW": 2, "MEDIUM": 22}
 
 
 def test_evidence_coverage_baseline():
-    row = scalar("SELECT coverage_pct FROM audit_core.vw_evidence_coverage LIMIT 1")
+    row = scalar("""
+        SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE fe.finding_id IS NOT NULL)
+                     / NULLIF(COUNT(*), 0), 2)
+        FROM audit_core.fact_risk_finding f
+        LEFT JOIN (SELECT DISTINCT finding_id FROM audit_core.finding_evidence) fe
+          ON fe.finding_id = f.finding_id
+        WHERE substring(f.rule_id, 1, 4) <> 'PPS-'
+    """)
     assert float(row) == pytest.approx(67.5)
 
 

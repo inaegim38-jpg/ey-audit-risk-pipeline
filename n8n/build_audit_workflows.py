@@ -43,8 +43,17 @@ wf1_nodes = [
                                          "triggerAtHour": 7, "triggerAtMinute": 0}]}},
          typeVersion=1.2),
     node("wf1-2", "Code: 감시 대상", "n8n-nodes-base.code", [220, 0],
-         {"jsCode": "// 감시 대상 법인. 실무에서는 프로젝트 마스터에서 조회한다.\n"
-                    "return [{ json: { corp_code: '00123456', engagement_id: 'ENG-2026-001' } }];"},
+         {"jsCode": "// 실제 운영에서는 AEGIS_WATCH_TARGETS_JSON을 프로젝트 마스터에서 주입한다.\n"
+                    "const raw = $env.AEGIS_WATCH_TARGETS_JSON;\n"
+                    "if (!raw || !$env.DART_API_KEY) {\n"
+                    "  throw new Error('DART_API_KEY and AEGIS_WATCH_TARGETS_JSON are required; refusing synthetic fallback');\n"
+                    "}\n"
+                    "let targets;\n"
+                    "try { targets = JSON.parse(raw); } catch (e) { throw new Error('AEGIS_WATCH_TARGETS_JSON must be valid JSON'); }\n"
+                    "if (!Array.isArray(targets) || targets.length === 0 || targets.some(t => !t.corp_code || !t.engagement_id)) {\n"
+                    "  throw new Error('each DART watch target needs corp_code and engagement_id');\n"
+                    "}\n"
+                    "return targets.map(t => ({ json: t }));"},
          typeVersion=2),
     node("wf1-3", "HTTP: DART 공시목록", "n8n-nodes-base.httpRequest", [440, 0],
          {"url": "https://opendart.fss.or.kr/api/list.json",

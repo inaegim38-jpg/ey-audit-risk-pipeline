@@ -45,7 +45,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// 감시 대상 법인. 실무에서는 프로젝트 마스터에서 조회한다.\nreturn [{ json: { corp_code: '00123456', engagement_id: 'ENG-2026-001' } }];"
+        "jsCode": "// 실제 운영에서는 AEGIS_WATCH_TARGETS_JSON을 프로젝트 마스터에서 주입한다.\nconst raw = $env.AEGIS_WATCH_TARGETS_JSON;\nif (!raw || !$env.DART_API_KEY) {\n  throw new Error('DART_API_KEY and AEGIS_WATCH_TARGETS_JSON are required; refusing synthetic fallback');\n}\nlet targets;\ntry { targets = JSON.parse(raw); } catch (e) { throw new Error('AEGIS_WATCH_TARGETS_JSON must be valid JSON'); }\nif (!Array.isArray(targets) || targets.length === 0 || targets.some(t => !t.corp_code || !t.engagement_id)) {\n  throw new Error('each DART watch target needs corp_code and engagement_id');\n}\nreturn targets.map(t => ({ json: t }));"
       }
     },
     {

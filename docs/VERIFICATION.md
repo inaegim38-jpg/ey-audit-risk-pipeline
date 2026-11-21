@@ -143,3 +143,9 @@ PBC intake 이후 단계에서 n8n이 사용자가 임의로 작성한 숫자를
 | tie-out 재실행 | 각 rule 결과 1행 유지, idempotent |
 
 이 단계는 아직 finding을 확정하지 않는다. 다음 단계에서 `FAILED` tie-out만 candidate finding/evidence로 승격하고, `PENDING`은 추가자료 요청 큐로 보내며 최종 판정은 HITL로 남긴다.
+
+## 17. PBC finding/evidence/HITL 경계
+
+`sql/25_pbc_finding_linkage.sql`과 `run_pbc_findings()`를 synthetic failed tie-out으로 실행했습니다. 불균형 GL과 TB를 비교한 `PBC-TB-01`은 `OPEN` candidate finding 1건으로 생성됐고, GL/TB 원본 batch evidence 2건이 `finding_evidence`에 연결됐습니다. `PBC-AR-01`과 `PBC-CON-01`은 finding으로 만들지 않고 각각 `OPEN` 추가자료 요청 1건씩을 `pbc_request_queue`에 생성했습니다.
+
+검증 후 synthetic finding·evidence·request·tie-out·fact·ingestion 행은 모두 삭제했습니다. 실제 client 파일이 들어오면 동일 함수가 `FAILED`만 후보로 승격하고, `PENDING`은 보완자료 요청으로 남기며, reviewer가 최종 disposition을 결정합니다.

@@ -26,7 +26,8 @@ for sql in \
   sql/15_disclosure_events.sql \
   sql/16_ecl_simulator.sql \
   sql/17_ai_qa_goldset.sql \
-  sql/18_source_registry.sql; do
+  sql/18_source_registry.sql \
+  sql/19_sanction_registry.sql; do
   echo "[bootstrap] $sql"
   psql --set ON_ERROR_STOP=1 --file="$sql"
 done

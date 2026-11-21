@@ -50,4 +50,10 @@ python3 scripts/source_adapters.py ecos \
 - 로컬 샌드박스: credential은 세션 runtime으로만 주입했으며 파일·로그·저장소에는 저장하지 않음
 - 합성 seed: 룰·ECL·AI QA 계약 테스트용으로만 사용
 
+## 공정위·조달 공공데이터 계약
+
+공정위·조달 제재/처분의 공통 정규화 대상은 `fact_sanction_event`이며, 원천 응답은 먼저 `stg_source_payload`에 저장한다. 필수 lineage는 `source_payload_id`, `source_code`, `source_record_id`, 사업자번호/법인번호, 처분일, 제재유형, 사건번호, 원문 locator다. 공공데이터포털 인증키가 없을 때는 호출하지 않고 실패한다.
+
+현재 확인된 공식 조달 서비스는 [나라장터 입찰공고정보서비스](https://www.data.go.kr/data/15129394/openapi.do), [나라장터 계약과정통합공개서비스](https://www.data.go.kr/data/15129459/openapi.do), [나라장터 공공데이터개방표준서비스](https://www.data.go.kr/data/15058815/openapi.do)다. 이 중 계약과정통합공개서비스는 `apis.data.go.kr/1230000/ao/CntrctProcssIntgOpenService` base URL과 식별번호 기반 조회 계약이 확인됐으며, 최신 포털 정책상 서비스별 조회기간 제한도 적용될 수 있다. 공정위 제재 dataset과 조달 제재 dataset의 정확한 endpoint·오퍼레이션은 API key 수령 및 활용신청 상태 확인 후 확정한다.
+
 실제 키가 없는 상태에서 성공으로 표시하는 것은 금지한다. credential 주입 후에는 preflight → DART test call → `stg_disclosure_event` upsert → `run_rules()` → Slack 알림 순서로 end-to-end 검증한다.

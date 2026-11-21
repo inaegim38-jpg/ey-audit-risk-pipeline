@@ -76,3 +76,5 @@
 | WF-2 PBC 경계 | PBC input preflight → ingestion log → tie-out 예외 → Slack | 구현 완료, 실제 PBC 파일 연결 대상 |
 | WF-4 AI/조서 경계 | goldset QA → summary → export manifest → HITL 예외 | 구현 완료, 실제 Canvas/Solar adapter·Word/Excel writer 대상 |
 | 원천 adapter | DART credential contract | WF-1 runtime key·target 주입 및 fail-closed; ECOS/공정위/XBRL 추가 대상 |
+
+실제 credential을 세션에 비노출 주입해 DART·ECOS를 end-to-end 검증했습니다. OpenDART는 공개 법인코드로 공시 100건을 수신해 `stg_source_payload`와 `stg_disclosure_event`에 100건 연결했고, ECOS는 일별 원/미국달러 환율 59건을 수신해 `stg_source_payload`와 `fact_macro_ecos`에 59건 연결했습니다. 키 값은 파일·로그·Git에 저장하지 않았습니다.

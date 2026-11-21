@@ -39,6 +39,13 @@ CREATE INDEX IF NOT EXISTS idx_source_payload_source_time
 CREATE INDEX IF NOT EXISTS idx_source_payload_engagement
     ON audit_core.stg_source_payload (engagement_id, source_code, observed_at DESC);
 
+ALTER TABLE audit_core.stg_disclosure_event
+    ADD COLUMN IF NOT EXISTS source_payload_id BIGINT
+    REFERENCES audit_core.stg_source_payload(payload_id);
+ALTER TABLE audit_core.fact_macro_ecos
+    ADD COLUMN IF NOT EXISTS source_payload_id BIGINT
+    REFERENCES audit_core.stg_source_payload(payload_id);
+
 INSERT INTO audit_core.dim_source_system
     (source_code, source_name, source_type, endpoint_template, credential_env)
 VALUES

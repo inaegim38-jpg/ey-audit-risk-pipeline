@@ -74,6 +74,8 @@ python3 scripts/pbc_intake.py \
 
 필수 컬럼은 `GL`: `doc_no, posting_date, account_code, debit, credit`, `TB`: `account_code, debit, credit`, `AR`: `invoice_no, customer_id, amount, currency`, `CONTRACT`: `contract_id, vendor_id, contract_amount`이다. 동일 engagement와 동일 파일 hash를 재실행하면 ingestion log를 upsert해 중복 배치를 만들지 않는다. 실제 파일이 제공되기 전에는 live PBC 행수나 tie-out 결과를 주장하지 않는다.
 
+WF-2 n8n은 `AEGIS_PBC_INPUTS_JSON`을 intake 실행 결과 manifest로만 소비한다. 각 항목에 `engagement_id`, `file_name`, `pbc_file_type`, `sha256_hash`, `source_path`, `header_sha256`, `row_count`, `debit_credit_diff`, `tieout_status`가 모두 있어야 하며, 허용 상태는 `PASSED`, `FAILED`, `PENDING`뿐이다. WF-2는 사용자가 임의로 입력한 행수나 차대조 결과를 성공값으로 승격하지 않고, 검증된 metadata와 lineage를 `stg_ingestion_log`에 upsert한다.
+
 ## 공정위·조달 공공데이터 계약
 
 공정위·조달 제재/처분의 공통 정규화 대상은 `fact_sanction_event`이며, 원천 응답은 먼저 `stg_source_payload`에 저장한다. 필수 lineage는 `source_payload_id`, `source_code`, `source_record_id`, 사업자번호/법인번호, 처분일, 제재유형, 사건번호, 원문 locator다. 공공데이터포털 인증키가 없을 때는 호출하지 않고 실패한다.

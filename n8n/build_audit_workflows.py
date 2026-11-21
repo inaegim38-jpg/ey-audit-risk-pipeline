@@ -138,18 +138,20 @@ wf2_nodes = [
          {"jsCode": "const raw = $env.AEGIS_PBC_INPUTS_JSON;\n"
                     "if (!raw) throw new Error('AEGIS_PBC_INPUTS_JSON is required; refusing untracked PBC input');\n"
                     "let inputs;\ntry { inputs = JSON.parse(raw); } catch (e) { throw new Error('AEGIS_PBC_INPUTS_JSON must be valid JSON'); }\n"
-                    "if (!Array.isArray(inputs) || inputs.length === 0 || inputs.some(x => !x.file_name || !x.sha256_hash || x.row_count === undefined)) {\n"
-                    "  throw new Error('each PBC input needs file_name, sha256_hash, and row_count');\n}\n"
+                    "const allowed = new Set(['GL', 'TB', 'AR', 'CONTRACT']);\n"
+                    "if (!Array.isArray(inputs) || inputs.length === 0 || inputs.some(x => !x.engagement_id || !x.file_name || !x.sha256_hash || !x.source_path || !x.header_sha256 || x.row_count === undefined || !allowed.has(x.pbc_file_type) || !['PASSED', 'FAILED', 'PENDING'].includes(x.tieout_status))) {\n"
+                    "  throw new Error('each PBC input must be intake-generated metadata: engagement_id, file_name, pbc_file_type, sha256_hash, source_path, header_sha256, row_count, tieout_status');\n}\n"
                     "return inputs.map(x => ({ json: x }));"}, typeVersion=2),
     node("wf2-3", "Postgres: PBC 적재 이력", "n8n-nodes-base.postgres", [440, 0],
          {"operation": "executeQuery",
           "query": "INSERT INTO audit_core.stg_ingestion_log\n"
-                   "  (engagement_id, file_name, sha256_hash, row_count, debit_credit_diff, tieout_status, ingested_by)\n"
-                   "VALUES ($1, $2, $3, $4, $5, CASE WHEN ABS($5) <= 1 THEN 'PASSED' ELSE 'FAILED' END, 'n8n-wf2')\n"
+                   "  (engagement_id, file_name, sha256_hash, row_count, debit_credit_diff, tieout_status, ingested_by, pbc_file_type, source_path, header_sha256)\n"
+                   "VALUES ($1, $2, $3, $4, $5, $6, 'n8n-wf2', $7, $8, $9)\n"
                    "ON CONFLICT (engagement_id, sha256_hash) DO UPDATE SET\n"
                    "  row_count = EXCLUDED.row_count, debit_credit_diff = EXCLUDED.debit_credit_diff,\n"
-                   "  tieout_status = EXCLUDED.tieout_status, ingested_at = NOW();",
-          "options": {"queryReplacement": "={{ [$json.engagement_id, $json.file_name, $json.sha256_hash, $json.row_count, $json.debit_credit_diff || 0] }}"}},
+                   "  tieout_status = EXCLUDED.tieout_status, pbc_file_type = EXCLUDED.pbc_file_type,\n"
+                   "  source_path = EXCLUDED.source_path, header_sha256 = EXCLUDED.header_sha256, ingested_at = NOW();",
+          "options": {"queryReplacement": "={{ [$json.engagement_id, $json.file_name, $json.sha256_hash, $json.row_count, $json.debit_credit_diff || 0, $json.tieout_status, $json.pbc_file_type, $json.source_path, $json.header_sha256] }}"}},
          typeVersion=2.5, credentials=PG),
     node("wf2-4", "Postgres: PBC 예외 조회", "n8n-nodes-base.postgres", [660, 0],
          {"operation": "executeQuery",

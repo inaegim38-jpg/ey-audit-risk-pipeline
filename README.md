@@ -153,6 +153,16 @@ priority = Σ(태그 가중치) + 문서유형 가중치 + 근접중복 1.0 + �
 
 현재 결과는 **룰 14종 / 파인딩 40건(CRITICAL 5 · HIGH 11 · MEDIUM 22 · LOW 2) / 대상 항목 2,225건**입니다. WF-3은 n8n 2.35.7에서 `n8n execute`로 단독 실행해 `status = success`까지 확인했습니다.
 
+## FX-AR / IFRS 9 ECL 시뮬레이터 — Phase 2
+
+`sql/16_ecl_simulator.sql`은 AR·AR_FX를 counterparty·통화별로 집계하고 BASE 및 ±10%·±20% FX shock을 적용해 PD/LGD 기반 ECL을 재산출합니다. 결과는 `dim_fx_scenario`, `dim_pd_lgd_curve`, `fact_ecl_recalc`, `vw_ecl_scenario_summary`, `vw_ecl_top_gaps`로 제공되며, 기본 실행은 기존 40건 finding을 보존합니다. 모델 공식과 가정·한계는 [docs/ECL_MODEL.md](docs/ECL_MODEL.md)에 정리했습니다.
+
+```bash
+PGPASSWORD=audit_password123 ./scripts/bootstrap.sh
+# 또는 Phase 0/1 DB에서
+PGPASSWORD=audit_password123 psql -f sql/16_ecl_simulator.sql
+```
+
 ## 통합 콘솔 — Phase 1
 
 `console/`은 `audit_core` 결과를 사람이 검토하는 경량 FastAPI 콘솔입니다. 워크리스트에서 파인딩을 필터링하고, 상세 화면의 3-Pane에서 연결 증거의 SHA-256·AI QA 출력·룰 임계값을 함께 확인한 뒤 disposition을 변경할 수 있습니다. 상태 변경은 `fact_risk_finding`과 `change_log`에 한 트랜잭션으로 기록됩니다.
@@ -189,13 +199,13 @@ docs/
   VERIFICATION.md         실행·대조 검증 기록
   AUDIT_CORE.md           audit_core 3계층·룰 14종·증거 커버리지·한계
 console/                 FastAPI 3-Pane 검토 콘솔 (워크리스트·증거·공시)
-scripts/bootstrap.sh     PostgreSQL sql/01~15 재현 실행기
+scripts/bootstrap.sh     PostgreSQL sql/01~16 재현 실행기
 tests/test_audit_core.py audit_core 기준선 계약 테스트
 sql/
   01~07                   거래 검증 엔진 (PostgreSQL)
   08_forensic_case_schema.sql  포렌식 계층 스키마
   09_forensic_pbi_views.sql    포렌식 Power BI 뷰 4종
-  10~15                   audit_core 3계층·룰 14종·증거 연결·검증·공시 감시
+  10~16                   audit_core 3계층·룰 14종·증거 연결·검증·공시 감시·ECL 시뮬레이터
 python/                 BankSim·서울시 데이터 적재, 검토 시트 생성
 n8n/                    수집·검증 워크플로우, 포렌식 케이스, 공시 감시(WF-1), 룰 엔진(WF-3)
 powerbi/                DAX 측정값 (거래 검증 8개, 포렌식 22개)

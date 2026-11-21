@@ -113,3 +113,17 @@ PBC intake 이후 단계에서 n8n이 사용자가 임의로 작성한 숫자를
 | WF-2 JSON | `python3 -m json.tool n8n/wf2_pbc_tieout.json` | PASS; 7 nodes |
 | WF-2 회귀 | `pytest -q` | PASS 23개 |
 | 실제 PBC 데이터 | 고객 원본 파일 미제공 | 실행하지 않음; live 행수·tie-out·finding 생성 없음 |
+
+## 15. Synthetic PBC end-to-end validation
+
+실제 고객 PBC가 없는 상태에서 별도 표시한 synthetic CSV 4종을 생성해 실제 `scripts/pbc_intake.py`와 PostgreSQL ingestion 경계를 실행했습니다. 이 데이터는 고객자료나 감사증거가 아니며, 검증 종료 후 DB에서 삭제했습니다.
+
+| 파일 유형 | synthetic 행수 | debit-credit 차이 | 결과 |
+|---|---:|---:|---|
+| GL | 4 | 0.00 | `PASSED` |
+| TB | 4 | 0.00 | `PASSED` |
+| AR | 3 | 0.00 | `PENDING` (상세 AR tie-out 전) |
+| CONTRACT | 2 | 0.00 | `PENDING` (계약 tie-out 전) |
+| 불균형 GL negative case | 2 | 100,000.00 | `FAILED` |
+
+추가 negative case도 확인했습니다. 필수 컬럼이 없는 AR 파일과 expected SHA-256이 틀린 파일은 종료 코드 2로 차단되고 ingestion log에 기록되지 않았습니다. 정상 GL을 동일 engagement·동일 hash로 재실행해도 배치는 1건으로 유지되어 idempotency를 확인했습니다. Synthetic ingestion 행은 검증 후 모두 삭제했으며, 실제 고객 파일의 live 결과로 해석하면 안 됩니다.

@@ -19,7 +19,7 @@
 | Workflow | 반드시 수행할 일 | 현재 상태 |
 |---|---|---|
 | WF-1 수집·조기경보 | DART/원천 수집 → staging upsert → 정정·주요사항 flag → 알림 | DART workflow 구현. `DART_API_KEY`·watch target runtime 주입, fail-closed |
-| WF-2 PBC Tie-out | GL/AR/계약 intake → 해시·행수 검증 → COA/차대조 → 예외 생성 | CSV preflight·해시·행수·GL/TB 차대조 metadata 구현; 실제 client 파일 및 COA/AR/계약 tie-out 대상 |
+| WF-2 PBC Tie-out | GL/AR/계약 intake → 해시·행수 검증 → COA/차대조 → 예외 생성 | CSV intake와 n8n manifest preflight·lineage upsert 연결; 실제 client 파일 및 COA/AR/계약 tie-out 대상 |
 | WF-3 JET·FX-AR·ECL | Benford·SoD·주말/심야·다변량 → FX/ECL 시나리오 → summary | 룰 엔진 + ECL SQL 구현; WF-3에 ECL/요약 단계 확장 대상 |
 | WF-4 AI QA·조서 | Canvas/Solar JSON → goldset QA → 예외 큐 → 3-Pane/조서 export | Phase 3 goldset 구현; 실제 model adapter·export 단계 구현 대상 |
 

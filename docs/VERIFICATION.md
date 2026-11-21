@@ -102,3 +102,14 @@ HITL 상태 전이도 검증했습니다. 조달 후보 1건을 `OPEN → IN_REV
 | 컴파일/공백 | `python3 -m compileall -q console tests scripts n8n && git diff --check` | PASS |
 
 지원 유형은 `GL`, `TB`, `AR`, `CONTRACT`이며, 파일 전체 SHA-256·header SHA-256·행수·source path를 ingestion log에 기록한다. `GL`·`TB`는 debit-credit 차이를 계산해 `PASSED`/`FAILED`를 정하고, `AR`·`CONTRACT`는 실제 상세 tie-out 전 `PENDING`으로 남긴다. 동일 engagement와 SHA-256 재실행은 upsert 계약이다. 실제 client 파일 제공 후에만 동일 명령으로 live intake와 finding/evidence/HITL 연결을 수행한다.
+
+## 14. WF-2 manifest 연결
+
+PBC intake 이후 단계에서 n8n이 사용자가 임의로 작성한 숫자를 신뢰하지 않도록, WF-2 preflight를 intake-generated manifest 계약으로 좁혔습니다. `pbc_file_type`, `source_path`, `header_sha256`, `tieout_status`를 필수화하고, Postgres upsert가 해당 lineage 필드를 함께 보존하도록 generator와 생성 JSON을 갱신했습니다.
+
+| 검증 | 명령·방법 | 결과 |
+|---|---|---|
+| workflow 재생성 | `python3 n8n/build_audit_workflows.py` | PASS; WF-1~WF-4 JSON 재생성 |
+| WF-2 JSON | `python3 -m json.tool n8n/wf2_pbc_tieout.json` | PASS; 7 nodes |
+| WF-2 회귀 | `pytest -q` | PASS 23개 |
+| 실제 PBC 데이터 | 고객 원본 파일 미제공 | 실행하지 않음; live 행수·tie-out·finding 생성 없음 |

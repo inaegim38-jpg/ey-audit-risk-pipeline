@@ -182,6 +182,14 @@ PGPASSWORD=audit_password123 uvicorn console.app:app --host 127.0.0.1 --port 801
 
 화면은 AI가 결론을 확정하는 방식이 아니라, **AI·룰은 후보와 근거를 제시하고 사람이 최종 disposition을 남기는 방식**으로 설계했습니다.
 
+## AI QA 골드셋 하네스 — Phase 3
+
+`sql/17_ai_qa_goldset.sql`은 AI 실행 결과를 독립 골드셋과 대조합니다. 원문 SHA-256, `ai_json`, 필드 일치 수, 환각 플래그, `APPROVED/ESCALATED` 상태를 함께 평가하고 실패 결과는 검토 큐로 보냅니다. 합성 골드셋 10건에서 10건 PASS, 0건 FAIL, 0건 REVIEW를 확인했습니다. 설계와 실제 적용 한계는 [docs/AI_QA_GOLDSET.md](docs/AI_QA_GOLDSET.md)에 정리했습니다.
+
+```bash
+PGPASSWORD=audit_password123 psql -f sql/17_ai_qa_goldset.sql
+```
+
 ## 구조
 
 ```text
@@ -199,13 +207,13 @@ docs/
   VERIFICATION.md         실행·대조 검증 기록
   AUDIT_CORE.md           audit_core 3계층·룰 14종·증거 커버리지·한계
 console/                 FastAPI 3-Pane 검토 콘솔 (워크리스트·증거·공시)
-scripts/bootstrap.sh     PostgreSQL sql/01~16 재현 실행기
+scripts/bootstrap.sh     PostgreSQL sql/01~17 재현 실행기
 tests/test_audit_core.py audit_core 기준선 계약 테스트
 sql/
   01~07                   거래 검증 엔진 (PostgreSQL)
   08_forensic_case_schema.sql  포렌식 계층 스키마
   09_forensic_pbi_views.sql    포렌식 Power BI 뷰 4종
-  10~16                   audit_core 3계층·룰 14종·증거 연결·검증·공시 감시·ECL 시뮬레이터
+  10~17                   audit_core 3계층·룰 14종·증거 연결·검증·공시 감시·ECL·AI QA 골드셋
 python/                 BankSim·서울시 데이터 적재, 검토 시트 생성
 n8n/                    수집·검증 워크플로우, 포렌식 케이스, 공시 감시(WF-1), 룰 엔진(WF-3)
 powerbi/                DAX 측정값 (거래 검증 8개, 포렌식 22개)

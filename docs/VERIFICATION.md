@@ -35,3 +35,19 @@
 | 기준선 보존 | `SELECT count(*) FROM audit_core.fact_risk_finding` | 40건 유지 |
 
 실행 결과의 BASE summary는 EAD 12,204,065,000원, ECL 212,244,609원, gap -107,755,391원(50.77%)이다. `docs/ECL_MODEL.md`에 전체 scenario 결과와 입력 가정을 기록했다. 데이터와 PD/LGD는 합성 입력이므로 실제 IFRS 9 보고 모델로 사용하지 않는다.
+
+## 10. Phase 3 AI QA 골드셋 하네스
+
+`sql/17_ai_qa_goldset.sql`을 실행해 기존 합성 AI QA 40건 중 10건을 골드셋으로 고정하고, exact-match·원문 해시·환각·승격 상태를 평가했습니다.
+
+| 검증 | 명령·방법 | 결과 |
+|---|---|---|
+| SQL 실행 | `psql --set ON_ERROR_STOP=1 -f sql/17_ai_qa_goldset.sql` | PASS |
+| 골드셋 범위 | `dim_ai_qa_goldset` | 10건: clean 5 / low accuracy 2 / hallucination 3 |
+| 평가 결과 | `vw_ai_qa_goldset_summary` | 10 evaluated / 10 PASS / 0 FAIL / 0 REVIEW |
+| 환각 gate | `hallucination_cases_pass` | 3/3 |
+| escalation gate | `low_accuracy_escalated` | 2/2 |
+| 변조 검출 | `contract_001` amount 임시 변경 후 transaction rollback | FAIL 1건 검출, 원상 복구 |
+| 기준선 보존 | `fact_risk_finding` count | 40건 유지 |
+
+현재 골드셋은 합성 seed의 truth에서 파생된 개발용 계약 테스트이며, 실제 고객 적용 전에는 독립 human-reviewed goldset과 reviewer sign-off로 교체해야 합니다.

@@ -20,3 +20,18 @@
 구현 중 `vw_finding_worklist`에 `finding_id`가 노출되지 않는 것을 확인해, 콘솔 목록 조회는 해당 뷰가 아니라 `fact_risk_finding`과 `rule_catalog`을 직접 조인하도록 조정했습니다. 화면에서 상세 링크가 실제 UUID를 가리키는지까지 확인했습니다.
 
 현재 콘솔은 데모용 단일 환경이며 인증·RLS는 구현하지 않았습니다. 다음 단계에서 실제 프로젝트 사용자·engagement별 접근 통제를 붙일 수 있습니다.
+
+## 9. Phase 2 FX-AR / IFRS 9 ECL 시뮬레이터
+
+`sql/16_ecl_simulator.sql`을 Phase 0/1 데이터베이스에 실행하고, 기본 옵션(`p_emit_findings = FALSE`)으로 분석 테이블만 갱신했습니다.
+
+| 검증 | 명령·방법 | 결과 |
+|---|---|---|
+| SQL 실행 | `psql --set ON_ERROR_STOP=1 -f sql/16_ecl_simulator.sql` | PASS; 5개 scenario × 66개 exposure upsert |
+| 시나리오 | `SELECT * FROM audit_core.dim_fx_scenario` 및 summary view | BASE, ±10%, ±20% 5개 |
+| PD/LGD curve | `SELECT * FROM audit_core.dim_pd_lgd_curve` | KSIC 29199 / UNRATED / PD 4% / LGD 45% 1행 |
+| 결과 grain | `fact_ecl_recalc` | scenario별 66행, FX exposure 33행 |
+| 방향성 | summary의 stressed EAD·ECL 비교 | FX 상승 시 증가, 하락 시 감소; KRW exposure 불변 |
+| 기준선 보존 | `SELECT count(*) FROM audit_core.fact_risk_finding` | 40건 유지 |
+
+실행 결과의 BASE summary는 EAD 12,204,065,000원, ECL 212,244,609원, gap -107,755,391원(50.77%)이다. `docs/ECL_MODEL.md`에 전체 scenario 결과와 입력 가정을 기록했다. 데이터와 PD/LGD는 합성 입력이므로 실제 IFRS 9 보고 모델로 사용하지 않는다.

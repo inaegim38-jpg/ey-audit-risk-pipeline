@@ -86,3 +86,5 @@
 조달 후보 룰 `PPS-01~PPS-03`도 실행했습니다. 각각 7건·4건·5건의 후보를 생성해 기존 40건과 분리된 총 56건의 finding을 만들었고, 16건 모두 `OPEN`으로 남겼습니다. 동일 함수를 재실행하면 신규 0건·갱신 16건으로 멱등성을 확인했습니다. 확정·오탐 판정은 아직 수행하지 않았습니다.
 
 조달 후보 16건에는 `EV-PPS-000006` raw API payload evidence를 연결했습니다. evidence SHA-256, payload ID, 공고번호, 공식 locator가 3-Pane 조회에서 함께 반환되는 것을 smoke-test했고, 전체 coverage는 56건 중 43건, 76.79%로 확인했습니다. 기존 40건의 legacy evidence 기준선은 67.50%로 유지됩니다.
+
+HITL 상태 전이도 검증했습니다. 조달 후보 1건을 `OPEN → IN_REVIEW → OPEN`으로 변경하면서 reviewer `procurement.reviewer`, reviewed_at, `change_log` 2건이 남는 것을 확인했습니다. 최종 상태는 다시 `OPEN`이며, 다음 구현 단계는 실제 PBC 파일 intake·SHA-256·행수·GL/AR/계약 tie-out입니다.

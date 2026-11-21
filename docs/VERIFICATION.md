@@ -149,3 +149,17 @@ PBC intake 이후 단계에서 n8n이 사용자가 임의로 작성한 숫자를
 `sql/25_pbc_finding_linkage.sql`과 `run_pbc_findings()`를 synthetic failed tie-out으로 실행했습니다. 불균형 GL과 TB를 비교한 `PBC-TB-01`은 `OPEN` candidate finding 1건으로 생성됐고, GL/TB 원본 batch evidence 2건이 `finding_evidence`에 연결됐습니다. `PBC-AR-01`과 `PBC-CON-01`은 finding으로 만들지 않고 각각 `OPEN` 추가자료 요청 1건씩을 `pbc_request_queue`에 생성했습니다.
 
 검증 후 synthetic finding·evidence·request·tie-out·fact·ingestion 행은 모두 삭제했습니다. 실제 client 파일이 들어오면 동일 함수가 `FAILED`만 후보로 승격하고, `PENDING`은 보완자료 요청으로 남기며, reviewer가 최종 disposition을 결정합니다.
+
+## 18. WF-5 PBC 추가자료 요청 알림
+
+`sql/26_pbc_notification_log.sql`과 `n8n/wf5_pbc_request_notify.json`을 추가했습니다. WF-5는 OPEN PBC 요청 중 EMAIL 성공 log가 없는 건만 대상으로 하며, 승인된 engagement별 recipient mapping과 `SMTP_CRED`가 없으면 fail-closed로 중단합니다.
+
+| 검증 | 결과 |
+|---|---|
+| workflow 생성 | PASS; `wf5_pbc_request_notify.json`, 6 nodes |
+| 전체 n8n JSON | PASS; `wf*.json` JSON parse |
+| notification log migration | PASS; unique `(request_id, channel, recipient)` 및 index 생성 |
+| retry/idempotency 계약 | PASS; provider 성공 후에만 log insert, 동일 성공 건은 query에서 제외 |
+| 실제 client 발송 | 실행하지 않음; SMTP credential·승인 수신자 mapping 미주입 |
+
+실제 운영 활성화는 `AEGIS_PBC_EMAIL_ENABLED=true`, 승인된 `AEGIS_PBC_REQUEST_RECIPIENTS_JSON`, n8n `SMTP_CRED`를 별도로 설정한 뒤 수행해야 한다. 현재 구현은 자동 발송 workflow를 준비했지만, 현재 세션에서 고객이나 감사 대상 회사로 이메일을 발송했다고 주장하지 않는다.

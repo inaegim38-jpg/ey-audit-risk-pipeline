@@ -93,6 +93,20 @@ python3 scripts/pbc_load_and_tieout.py tieout \
 
 `sql/25_pbc_finding_linkage.sql`의 `audit_core.run_pbc_findings()`는 `FAILED` 결과만 `fact_risk_finding`에 candidate로 생성하고, 관련 GL/TB 원본 batch evidence를 `finding_evidence`에 연결한다. `PENDING` 결과는 `pbc_request_queue`에 추가자료 요청으로 남기며 finding으로 확정하지 않는다. 따라서 AI·룰은 후보와 요청만 만들고, reviewer가 3-Pane에서 원본 hash·대사 상세·추가자료를 확인한 뒤 HITL disposition을 기록한다.
 
+## WF-5 PBC 추가자료 요청 알림
+
+`n8n/wf5_pbc_request_notify.json`은 매일 07:15에 `pbc_request_queue.status='OPEN'` 요청을 조회하고, 아직 `pbc_notification_log`에 EMAIL 성공 기록이 없는 요청만 이메일 payload로 만든다. 수신자 mapping 또는 SMTP가 없으면 Code node에서 즉시 실패하며, 고객에게 부분 발송하거나 synthetic fallback을 하지 않는다.
+
+운영 활성화 전에 n8n 환경에 다음을 주입해야 한다.
+
+```bash
+AEGIS_PBC_EMAIL_ENABLED=true
+AEGIS_PBC_FROM_EMAIL=aegis-audit@example.com
+AEGIS_PBC_REQUEST_RECIPIENTS_JSON='{"ENG-2026-001":{"to":["approved.client@example.com"],"cc":["audit.manager@example.com"]}}'
+```
+
+실제 SMTP 비밀번호는 `SMTP_CRED` n8n credential에만 둔다. 이메일 node 성공 후에만 `pbc_notification_log`를 insert하므로 실패한 발송은 다음 스케줄에서 재시도되고, 동일 요청의 성공 메일은 중복 발송하지 않는다. 이 구현은 이메일 발송 준비·멱등성·fail-closed 경계를 완성한 것이며, SMTP credential과 승인된 수신자 mapping이 없는 현재 sandbox에서는 실제 고객 메일을 발송하지 않았다.
+
 ## 공정위·조달 공공데이터 계약
 
 공정위·조달 제재/처분의 공통 정규화 대상은 `fact_sanction_event`이며, 원천 응답은 먼저 `stg_source_payload`에 저장한다. 필수 lineage는 `source_payload_id`, `source_code`, `source_record_id`, 사업자번호/법인번호, 처분일, 제재유형, 사건번호, 원문 locator다. 공공데이터포털 인증키가 없을 때는 호출하지 않고 실패한다.

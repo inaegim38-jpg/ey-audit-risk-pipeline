@@ -33,7 +33,8 @@ for sql in \
   sql/22_procurement_evidence.sql \
   sql/23_pbc_intake.sql \
   sql/24_pbc_tieout_facts.sql \
-  sql/25_pbc_finding_linkage.sql; do
+  sql/25_pbc_finding_linkage.sql \
+  sql/26_pbc_notification_log.sql; do
   echo "[bootstrap] $sql"
   psql --set ON_ERROR_STOP=1 --file="$sql"
 done

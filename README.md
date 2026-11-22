@@ -13,6 +13,8 @@
 | 데모 실행 | `python scripts/portfolio_demo.py [--load-db]` → [artifacts/portfolio_demo/](artifacts/portfolio_demo/) |
 | Power BI 명세 | [powerbi/PORTFOLIO_DASHBOARD_SPEC.md](powerbi/PORTFOLIO_DASHBOARD_SPEC.md) (`.pbix`는 아직 없음) |
 
+WF-A~WF-C는 포트폴리오 시연용 별도 workflow이며, 고정 자동화 계약인 WF-1~WF-5(Architecture v2 §2)를 대체하지 않습니다. 두 계층 모두 이번 작업에서 수정하지 않았고 WF-A~WF-C는 `active=false`입니다.
+
 **연결하지 않은 것**: Power BI 클라우드 갱신(`MOCKED`), Slack, 메일. 코드는 AI 도움을 받아 작성하고 실행 결과를 확인하며 검토했습니다.
 
 초기화: `PGPASSWORD=... bash scripts/bootstrap.sh` (01–27 순서 적용)

@@ -14,6 +14,9 @@
 ## 흐름
 자료 접수(WF-A) → 정규화·적재 → `run_checks`(DQ/증빙/이상 후보, WF-B) → 검토 항목·보완 요청 **제안** 생성 → 사람이 `set_review_status`로 판정 → 현황 조회(WF-C) → Power BI.
 
+## 고정 자동화 계층과의 경계
+이 저장소의 자동화 계약은 [Architecture v2](ARCHITECTURE_V2.md) §2의 **WF-1~WF-5**이며, 이번 작업은 해당 workflow JSON을 수정하지 않습니다. 아래 WF-A~WF-C는 포트폴리오 시연을 위해 **별도로** 둔 산출물로, 운영 계약에 연결하지 않았고 모두 `active=false`입니다. 따라서 WF-A~WF-C는 WF-2(PBC tie-out)나 WF-3(룰 엔진)를 대체하지 않으며, 동일한 `portfolio` 스키마와 `run_checks()`를 호출하는 독립 실행 경로로만 존재합니다.
+
 ## 설계 결정과 이유
 - **임계값은 `rule_param` 테이블**: 코드 수정 없이 조정하고, 값이 없으면 기본값으로 때우지 않고 실패(fail-closed).
 - **멱등 실행**: 같은 입력으로 `run_checks`를 다시 돌려도 후보가 늘지 않고, 검토자가 바꾼 상태는 덮어쓰지 않습니다.

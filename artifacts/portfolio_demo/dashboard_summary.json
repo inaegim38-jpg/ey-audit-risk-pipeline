@@ -1,0 +1,19 @@
+{
+  "engagement_id": "SYN-PORTFOLIO-001",
+  "data_nature": "SYNTHETIC_DEMO (실제 고객·기업 자료 아님)",
+  "transaction_count": 10,
+  "document_count": 10,
+  "source_file_count": 3,
+  "finding_count": 7,
+  "exposure_amount": 5270000,
+  "severity_counts": {
+    "CRITICAL": 4,
+    "HIGH": 2,
+    "MEDIUM": 1,
+    "LOW": 0
+  },
+  "critical_high_count": 6,
+  "open_review_count": 7,
+  "review_completion_pct": 0.0,
+  "note": "결과는 검토 후보이며 부정 여부를 확정하지 않는다. 검토 상태는 모두 UNREVIEWED로 시작한다."
+}

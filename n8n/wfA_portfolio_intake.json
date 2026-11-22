@@ -1,0 +1,89 @@
+{
+  "id": "portfolioWfA01",
+  "name": "Portfolio A - 자료 접수",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Seoul",
+    "saveManualExecutions": true
+  },
+  "tags": [
+    {
+      "name": "portfolio"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "pfA-0",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "pfA-1",
+      "name": "Code: manifest 검증(fail-closed)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// 입력 manifest(JSON 배열)를 환경변수에서 읽는다. 없거나 잘못되면 합성 값으로 대체하지 않고 즉시 실패한다.\nconst raw = $env.PORTFOLIO_INPUT_MANIFEST_JSON;\nif (!raw) throw new Error('PORTFOLIO_INPUT_MANIFEST_JSON is not set (fail-closed: no synthetic fallback)');\nlet arr;\ntry { arr = JSON.parse(raw); } catch (e) { throw new Error('PORTFOLIO_INPUT_MANIFEST_JSON is not valid JSON: ' + e.message); }\nif (!Array.isArray(arr)) throw new Error('manifest must be a JSON array');\nif (arr.length === 0) throw new Error('manifest is empty');\nconst required = ['engagement_id', 'file_name', 'file_type', 'sha256_hash', 'row_count', 'source_path'];\nreturn arr.map((f, i) => {\n  for (const k of required) {\n    if (f[k] === undefined || f[k] === null || String(f[k]).trim() === '') throw new Error(`manifest[${i}] missing ${k}`);\n  }\n  if (!/^[0-9a-f]{64}$/.test(f.sha256_hash)) throw new Error(`manifest[${i}] invalid sha256_hash`);\n  const n = Number(f.row_count);\n  if (!Number.isInteger(n) || n < 0) throw new Error(`manifest[${i}] invalid row_count`);\n  return { json: { ...f, row_count: n } };\n});"
+      }
+    },
+    {
+      "id": "pfA-2",
+      "name": "PG: source_file 멱등 적재",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO portfolio.source_file (engagement_id, file_name, file_type, sha256_hash, row_count, source_path)\nVALUES ($1, $2, $3, $4, $5, $6)\nON CONFLICT (engagement_id, sha256_hash) DO UPDATE SET row_count = EXCLUDED.row_count\nRETURNING file_id, file_name, intake_status, (xmax = 0) AS newly_received",
+        "options": {
+          "queryReplacement": "={{ [$json.engagement_id, $json.file_name, $json.file_type, $json.sha256_hash, $json.row_count, $json.source_path] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "PG_CRED",
+          "name": "Postgres audit_db"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code: manifest 검증(fail-closed)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: manifest 검증(fail-closed)": {
+      "main": [
+        [
+          {
+            "node": "PG: source_file 멱등 적재",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

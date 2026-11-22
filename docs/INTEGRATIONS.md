@@ -114,3 +114,15 @@ AEGIS_PBC_REQUEST_RECIPIENTS_JSON='{"ENG-2026-001":{"to":["approved.client@examp
 현재 확인된 공식 조달 서비스는 [나라장터 입찰공고정보서비스](https://www.data.go.kr/data/15129394/openapi.do), [나라장터 계약과정통합공개서비스](https://www.data.go.kr/data/15129459/openapi.do), [나라장터 공공데이터개방표준서비스](https://www.data.go.kr/data/15058815/openapi.do)다. 이 중 계약과정통합공개서비스는 `apis.data.go.kr/1230000/ao/CntrctProcssIntgOpenService` base URL과 식별번호 기반 조회 계약이 확인됐으며, 최신 포털 정책상 서비스별 조회기간 제한도 적용될 수 있다. 공정위 제재 dataset과 조달 제재 dataset의 정확한 endpoint·오퍼레이션은 API key 수령 및 활용신청 상태 확인 후 확정한다.
 
 실제 키가 없는 상태에서 성공으로 표시하는 것은 금지한다. credential 주입 후에는 preflight → DART test call → `stg_disclosure_event` upsert → `run_rules()` → Slack 알림 순서로 end-to-end 검증한다.
+
+## 포트폴리오 워크플로우(WF-A/B/C) 환경변수
+
+| 변수 | 사용처 | 없을 때 |
+|---|---|---|
+| `PORTFOLIO_INPUT_MANIFEST_JSON` | WF-A 입력 manifest(JSON 배열: engagement_id, file_name, file_type, sha256_hash, row_count, source_path) | 합성 값으로 대체하지 않고 **실패(fail-closed)** |
+| `PORTFOLIO_ENGAGEMENT_ID` | WF-B, WF-C | 실패(fail-closed) |
+| `POWERBI_DATASET_NAME` | WF-B 갱신 이력 표시 이름 | `unset` 표기. 갱신은 어차피 `MOCKED` |
+
+- Postgres는 credential 참조 `PG_CRED`만 사용합니다. 비밀번호 등 값은 JSON·로그·문서에 넣지 않습니다.
+- n8n 코드 노드에서 `$env`를 읽으려면 n8n 실행 환경에 `N8N_BLOCK_ENV_ACCESS_IN_NODE=false`가 필요합니다(`docker-compose.yml`에는 아직 설정하지 않았습니다).
+- WF-A/B/C는 `active=false`이며 외부 메일·Slack·HTTP 호출 노드가 없습니다. Power BI 클라우드 갱신은 자격증명이 없어 `MOCKED`로만 기록합니다.

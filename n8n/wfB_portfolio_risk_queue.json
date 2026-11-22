@@ -1,0 +1,159 @@
+{
+  "id": "portfolioWfB01",
+  "name": "Portfolio B - 리스크 후보 검토 큐",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Seoul",
+    "saveManualExecutions": true
+  },
+  "tags": [
+    {
+      "name": "portfolio"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "pfB-0",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "pfB-1",
+      "name": "Code: engagement 확인(fail-closed)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const e = $env.PORTFOLIO_ENGAGEMENT_ID;\nif (!e || !String(e).trim()) throw new Error('PORTFOLIO_ENGAGEMENT_ID is not set (fail-closed)');\nreturn [{ json: { engagement_id: String(e).trim() } }];"
+      }
+    },
+    {
+      "id": "pfB-2",
+      "name": "PG: run_checks 실행(멱등)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT rule_id, inserted_count, updated_count FROM portfolio.run_checks($1)",
+        "options": {
+          "queryReplacement": "={{ [$json.engagement_id] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "PG_CRED",
+          "name": "Postgres audit_db"
+        }
+      }
+    },
+    {
+      "id": "pfB-3",
+      "name": "PG: 검토 큐 상위 20건",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        520,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT review_item_id, rule_id, severity, amount, suggested_priority, review_status, detail\nFROM portfolio.vw_pbi_dq_risk_queue\nWHERE engagement_id = $1 AND review_status IN ('UNREVIEWED', 'IN_REVIEW')\nORDER BY suggested_priority DESC, finding_id LIMIT 20",
+        "options": {
+          "queryReplacement": "={{ [$('Code: engagement 확인(fail-closed)').first().json.engagement_id] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "PG_CRED",
+          "name": "Postgres audit_db"
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "pfB-4",
+      "name": "PG: Power BI 갱신 MOCKED 이력",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        780,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO portfolio.refresh_log (dataset_name, status, completed_at, error_message)\nVALUES ($1, 'MOCKED', now(), 'MOCKED: Power BI credential not configured; no refresh was requested')\nRETURNING refresh_id, status",
+        "options": {
+          "queryReplacement": "={{ [$env.POWERBI_DATASET_NAME || 'portfolio_dataset (unset)'] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "PG_CRED",
+          "name": "Postgres audit_db"
+        }
+      },
+      "executeOnce": true
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code: engagement 확인(fail-closed)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: engagement 확인(fail-closed)": {
+      "main": [
+        [
+          {
+            "node": "PG: run_checks 실행(멱등)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PG: run_checks 실행(멱등)": {
+      "main": [
+        [
+          {
+            "node": "PG: 검토 큐 상위 20건",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PG: 검토 큐 상위 20건": {
+      "main": [
+        [
+          {
+            "node": "PG: Power BI 갱신 MOCKED 이력",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

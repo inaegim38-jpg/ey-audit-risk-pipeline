@@ -1,0 +1,123 @@
+{
+  "id": "portfolioWfC01",
+  "name": "Portfolio C - 검토·이슈 트래커 현황",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Seoul",
+    "saveManualExecutions": true
+  },
+  "tags": [
+    {
+      "name": "portfolio"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "pfC-0",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "pfC-1",
+      "name": "Code: engagement 확인(fail-closed)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const e = $env.PORTFOLIO_ENGAGEMENT_ID;\nif (!e || !String(e).trim()) throw new Error('PORTFOLIO_ENGAGEMENT_ID is not set (fail-closed)');\nreturn [{ json: { engagement_id: String(e).trim() } }];"
+      }
+    },
+    {
+      "id": "pfC-2",
+      "name": "PG: KPI 요약",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM portfolio.vw_pbi_kpi_summary WHERE engagement_id = $1",
+        "options": {
+          "queryReplacement": "={{ [$json.engagement_id] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "PG_CRED",
+          "name": "Postgres audit_db"
+        }
+      }
+    },
+    {
+      "id": "pfC-3",
+      "name": "PG: 미결 이슈(오래된 순)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        520,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT issue_id, rule_id, severity, issue_type, owner, due_date, disposition, age_days\nFROM portfolio.vw_pbi_issue_log\nWHERE engagement_id = $1 AND is_open_issue\nORDER BY age_days DESC, issue_id LIMIT 50",
+        "options": {
+          "queryReplacement": "={{ [$('Code: engagement 확인(fail-closed)').first().json.engagement_id] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "PG_CRED",
+          "name": "Postgres audit_db"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code: engagement 확인(fail-closed)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: engagement 확인(fail-closed)": {
+      "main": [
+        [
+          {
+            "node": "PG: KPI 요약",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PG: KPI 요약": {
+      "main": [
+        [
+          {
+            "node": "PG: 미결 이슈(오래된 순)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

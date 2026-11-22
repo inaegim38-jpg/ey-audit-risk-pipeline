@@ -16,6 +16,7 @@ n8n/pg_credential.json
 !review_sheet.xlsx
 !demo/review_console.xlsx
 !demo/findings.xlsx
+!artifacts/portfolio_demo/*.csv
 SEOUL_EXPENSE_PROFILE.md
 
 # 데모 실행 산출물: 원본 코퍼스와 DB는 재생성 가능하므로 커밋하지 않는다.

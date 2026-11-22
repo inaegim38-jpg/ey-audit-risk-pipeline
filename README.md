@@ -1,4 +1,27 @@
-# 포렌식 조사 지원 워크벤치
+# 감사·리스크 자료 정합성 및 검토 이슈 트래커
+
+> EY한영 감사부문 리스크관리 지원 인턴 직무(자료·데이터 관리, 문서·증빙 검토, 조사·분석 지원)에 맞춰 만든 **합성 데이터 기반 포트폴리오**입니다. 실제 고객·기업 자료는 사용하지 않았고, 결과는 검토 후보이며 부정 여부를 확정하지 않습니다.
+
+**흐름**: 자료 접수 → 정규화 → DQ/정합성 검증 → 거래·증빙 이상 후보 → 사람의 검토·보완 요청·이슈 상태 추적 → Power BI용 요약/검토 큐
+
+| 보고 싶은 것 | 위치 |
+|---|---|
+| 설계·룰·한계·n8n 템플릿 활용 정리 | [docs/PORTFOLIO_REFRAME_V3.md](docs/PORTFOLIO_REFRAME_V3.md) |
+| 실행 결과와 검증 내역 | [docs/PORTFOLIO_COMPLETION_REPORT.md](docs/PORTFOLIO_COMPLETION_REPORT.md) |
+| DB 스키마(`portfolio`) | [sql/27_portfolio_tracker.sql](sql/27_portfolio_tracker.sql) |
+| 워크플로우 3종(모두 비활성) | `n8n/wfA_portfolio_intake.json`, `wfB_portfolio_risk_queue.json`, `wfC_portfolio_review_tracker.json` |
+| 데모 실행 | `python scripts/portfolio_demo.py [--load-db]` → [artifacts/portfolio_demo/](artifacts/portfolio_demo/) |
+| Power BI 명세 | [powerbi/PORTFOLIO_DASHBOARD_SPEC.md](powerbi/PORTFOLIO_DASHBOARD_SPEC.md) (`.pbix`는 아직 없음) |
+
+**연결하지 않은 것**: Power BI 클라우드 갱신(`MOCKED`), Slack, 메일. 코드는 AI 도움을 받아 작성하고 실행 결과를 확인하며 검토했습니다.
+
+초기화: `PGPASSWORD=... bash scripts/bootstrap.sh` (01–27 순서 적용)
+
+---
+
+## (이전 프로젝트) 포렌식 조사 지원 워크벤치
+
+### 포렌식 조사 지원 워크벤치
 
 > 구현 기준선: [Architecture v2](docs/ARCHITECTURE_V2.md). 본 프로젝트는 DART XBRL·ECOS·공정위/조달·PBC·AI 원천에서 WF-1~WF-4를 거쳐 PostgreSQL master/staging/fact/mart, 검증 엔진, HITL, Power BI·조서 산출물로 이어지는 제안서 아키텍처를 구현한다.
 
